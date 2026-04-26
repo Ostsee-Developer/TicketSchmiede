@@ -15,11 +15,11 @@ export function hasMinRole(userRole: Role, minRole: Role): boolean {
 }
 
 export function isInternalRole(role: Role): boolean {
-  return [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.READ_ONLY].includes(role);
+  return ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[Role.READ_ONLY];
 }
 
 export function isCustomerRole(role: Role): boolean {
-  return [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER].includes(role);
+  return ROLE_HIERARCHY[role] < ROLE_HIERARCHY[Role.READ_ONLY];
 }
 
 // Permission checks by feature
