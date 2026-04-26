@@ -1,0 +1,669 @@
+// ============================================================
+// Ticket Schmiede - Prisma Schema
+// PostgreSQL | Mandanten-isoliert | Vollständiges RBAC
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  INTERNAL_ADMIN
+  TECHNICIAN
+  CUSTOMER_ADMIN
+  CUSTOMER_USER
+  READ_ONLY
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  DISABLED
+  LEFT
+}
+
+enum DeviceType {
+  LAPTOP
+  PC
+  SERVER
+  PRINTER
+  FIREWALL
+  SWITCH
+  ROUTER
+  SMARTPHONE
+  TABLET
+  MONITOR
+  DOCKING_STATION
+  NAS
+  ACCESS_POINT
+  UPS
+  OTHER
+}
+
+enum DeviceStatus {
+  ACTIVE
+  IN_STORAGE
+  IN_REPAIR
+  DECOMMISSIONED
+  LOST
+}
+
+enum LicenseType {
+  PERPETUAL
+  SUBSCRIPTION
+  VOLUME
+  OEM
+  FREEWARE
+  OPEN_SOURCE
+  TRIAL
+}
+
+enum TicketStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  EMAIL
+  NETWORK
+  USER_ACCOUNT
+  PRINTER
+  PHONE
+  VPN
+  OTHER
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  CREATE
+  UPDATE
+  DELETE
+  EXPORT
+  IMPORT
+  CREDENTIAL_VIEW
+  CREDENTIAL_CREATE
+  CREDENTIAL_UPDATE
+  CREDENTIAL_DELETE
+  PERMISSION_CHANGE
+  USER_LOCK
+  USER_UNLOCK
+  TWO_FA_ENABLE
+  TWO_FA_DISABLE
+  FILE_UPLOAD
+  FILE_DELETE
+}
+
+// ============================================================
+// TENANT / MANDANT
+// ============================================================
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  email       String?
+  phone       String?
+  website     String?
+  street      String?
+  city        String?
+  zipCode     String?
+  country     String   @default("DE")
+  logoUrl     String?
+  notes       String?
+  isActive    Boolean  @default(true)
+  externalRef String?  // für Excel-Import Referenzen
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  locations    Location[]
+  employees    Employee[]
+  workstations Workstation[]
+  devices      Device[]
+  software     Software[]
+  credentials  Credential[]
+  tickets      Ticket[]
+  userRoles    UserTenantRole[]
+  files        File[]
+  importJobs   ImportJob[]
+  exportJobs   ExportJob[]
+  auditLogs    AuditLog[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ============================================================
+// LOCATION / STANDORT
+// ============================================================
+
+model Location {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  street    String?
+  city      String?
+  zipCode   String?
+  country   String   @default("DE")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  workstations Workstation[]
+  devices      Device[]
+
+  @@index([tenantId])
+}
+
+// ============================================================
+// USER / BENUTZER
+// ============================================================
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String
+  passwordHash     String
+  isSuperAdmin     Boolean   @default(false)
+  isActive         Boolean   @default(true)
+  twoFactorEnabled Boolean   @default(false)
+  twoFactorSecret  String?   // TOTP secret - stored encrypted
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenantRoles     UserTenantRole[]
+  auditLogs       AuditLog[]
+  assignedTickets Ticket[]         @relation("AssignedTechnician")
+  createdTickets  Ticket[]         @relation("TicketCreator")
+  ticketComments  TicketComment[]
+
+  @@index([email])
+  @@index([isActive])
+}
+
+// ============================================================
+// RBAC: USER ↔ TENANT ↔ ROLE
+// ============================================================
+
+model UserTenantRole {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([role])
+}
+
+// ============================================================
+// EMPLOYEE / MITARBEITER
+// ============================================================
+
+model Employee {
+  id          String         @id @default(cuid())
+  tenantId    String
+  locationId  String?
+  externalRef String?        // für Import/Export Referenz
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  mobile      String?
+  position    String?
+  department  String?
+  status      EmployeeStatus @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location    Location?          @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  workstation Workstation?       @relation("EmployeeWorkstation")
+  devices     Device[]           @relation("EmployeeDevice")
+  software    EmployeeSoftware[]
+  credentials Credential[]
+  tickets     Ticket[]
+  files       File[]
+
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([status])
+  @@index([externalRef])
+}
+
+// ============================================================
+// WORKSTATION / ARBEITSPLATZ
+// ============================================================
+
+model Workstation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  locationId    String?
+  employeeId    String?  @unique
+  externalRef   String?
+  name          String
+  room          String?
+  networkOutlet String?
+  ipAddress     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  employee Employee? @relation("EmployeeWorkstation", fields: [employeeId], references: [id], onDelete: SetNull)
+  devices  Device[]  @relation("WorkstationDevice")
+  tickets  Ticket[]  @relation("TicketWorkstation")
+
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([externalRef])
+}
+
+// ============================================================
+// DEVICE / GERÄT (Asset Management)
+// ============================================================
+
+model Device {
+  id              String       @id @default(cuid())
+  tenantId        String
+  locationId      String?
+  employeeId      String?
+  workstationId   String?
+  externalRef     String?
+  type            DeviceType
+  manufacturer    String?
+  model           String?
+  serialNumber    String?
+  inventoryNumber String?
+  purchaseDate    DateTime?
+  warrantyUntil   DateTime?
+  os              String?
+  osVersion       String?
+  ipAddress       String?
+  macAddress      String?
+  hostname        String?
+  status          DeviceStatus @default(ACTIVE)
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location    Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  employee    Employee?     @relation("EmployeeDevice", fields: [employeeId], references: [id], onDelete: SetNull)
+  workstation Workstation?  @relation("WorkstationDevice", fields: [workstationId], references: [id], onDelete: SetNull)
+  software    DeviceSoftware[]
+  files       File[]
+  tickets     Ticket[]
+
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([employeeId])
+  @@index([workstationId])
+  @@index([serialNumber])
+  @@index([inventoryNumber])
+  @@index([type])
+  @@index([status])
+  @@index([warrantyUntil])
+  @@index([externalRef])
+}
+
+// ============================================================
+// SOFTWARE / LIZENZEN
+// ============================================================
+
+model Software {
+  id           String      @id @default(cuid())
+  tenantId     String
+  externalRef  String?
+  name         String
+  vendor       String?
+  version      String?
+  licenseType  LicenseType @default(PERPETUAL)
+  licenseKey   String?     // AES-256 encrypted if sensitive
+  licenseCount Int?
+  validFrom    DateTime?
+  validUntil   DateTime?
+  costCenter   String?
+  purchasePrice Decimal?   @db.Decimal(10, 2)
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees EmployeeSoftware[]
+  devices   DeviceSoftware[]
+  files     File[]
+
+  @@index([tenantId])
+  @@index([validUntil])
+  @@index([externalRef])
+}
+
+model EmployeeSoftware {
+  employeeId  String
+  softwareId  String
+  assignedAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  software Software @relation(fields: [softwareId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, softwareId])
+  @@index([employeeId])
+  @@index([softwareId])
+}
+
+model DeviceSoftware {
+  deviceId    String
+  softwareId  String
+  assignedAt  DateTime @default(now())
+
+  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  software Software @relation(fields: [softwareId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, softwareId])
+  @@index([deviceId])
+  @@index([softwareId])
+}
+
+// ============================================================
+// CREDENTIAL / ZUGANGSDATEN (verschlüsselt)
+// ============================================================
+
+model Credential {
+  id                String    @id @default(cuid())
+  tenantId          String
+  employeeId        String?
+  templateId        String?
+  externalRef       String?
+  name              String
+  username          String?
+  encryptedPassword String?   // AES-256-GCM encrypted
+  encryptedNotes    String?   // optional encrypted notes
+  url               String?
+  category          String?   // z.B. "Microsoft 365", "VPN", "Windows"
+  expiresAt         DateTime?
+  lastRotatedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee?           @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  template CredentialTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([templateId])
+  @@index([expiresAt])
+  @@index([externalRef])
+}
+
+// ============================================================
+// CREDENTIAL TEMPLATE / ZUGANGSDATEN-VORLAGE
+// ============================================================
+
+model CredentialTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  category     String?
+  usernameHint String?
+  urlHint      String?
+  isGlobal     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  credentials Credential[]
+
+  @@index([isGlobal])
+}
+
+// ============================================================
+// DEVICE TEMPLATE / GERÄTE-VORLAGE
+// ============================================================
+
+model DeviceTemplate {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  type         DeviceType
+  manufacturer String?
+  model        String?
+  isGlobal     Boolean    @default(true)
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([type])
+}
+
+// ============================================================
+// TICKET / SUPPORT-TICKET
+// ============================================================
+
+model Ticket {
+  id            String         @id @default(cuid())
+  tenantId      String
+  employeeId    String?
+  workstationId String?
+  deviceId      String?
+  technicianId  String?
+  createdById   String
+  number        Int
+  title         String
+  description   String
+  status        TicketStatus   @default(NEW)
+  priority      TicketPriority @default(MEDIUM)
+  category      TicketCategory @default(OTHER)
+  timeSpent     Int?           // Minuten
+  internalNotes String?
+  resolvedAt    DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee    Employee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  workstation Workstation?  @relation("TicketWorkstation", fields: [workstationId], references: [id], onDelete: SetNull)
+  device      Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  technician  User?         @relation("AssignedTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  createdBy   User          @relation("TicketCreator", fields: [createdById], references: [id])
+  comments    TicketComment[]
+  files       File[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([status])
+  @@index([priority])
+  @@index([technicianId])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  userId     String
+  content    String
+  isInternal Boolean  @default(false)
+  timeSpent  Int?     // Minuten für diesen Kommentar
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+}
+
+// ============================================================
+// FILE / DATEIANHANG
+// ============================================================
+
+model File {
+  id           String   @id @default(cuid())
+  tenantId     String
+  employeeId   String?
+  deviceId     String?
+  softwareId   String?
+  ticketId     String?
+  uploadedById String?
+  name         String   // display name
+  originalName String
+  mimeType     String
+  size         Int      // bytes
+  storagePath  String   // internal path / S3 key
+  storageType  String   @default("local") // "local" | "s3"
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  device   Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  software Software? @relation(fields: [softwareId], references: [id], onDelete: SetNull)
+  ticket   Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([ticketId])
+}
+
+// ============================================================
+// IMPORT JOB
+// ============================================================
+
+model ImportJob {
+  id           String    @id @default(cuid())
+  tenantId     String
+  userId       String
+  status       JobStatus @default(PENDING)
+  fileName     String
+  storagePath  String
+  totalRows    Int?
+  processedRows Int?
+  createdRows  Int?
+  updatedRows  Int?
+  errorRows    Int?
+  errors       Json?     // Array of { row, field, message }
+  preview      Json?     // Preview data before import
+  options      Json?     // { updateExisting, skipErrors, ... }
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// EXPORT JOB
+// ============================================================
+
+model ExportJob {
+  id          String    @id @default(cuid())
+  tenantId    String
+  userId      String
+  status      JobStatus @default(PENDING)
+  type        String    // "pdf" | "excel"
+  scope       String    // "tenant" | "employee" | "device" | "workstation"
+  scopeId     String?
+  options     Json?     // { includePasswords, includeTickets, ... }
+  storagePath String?
+  completedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  tenantId   String?
+  userId     String?
+  userEmail  String?     // denormalisiert für Lesbarkeit auch nach User-Löschung
+  action     AuditAction
+  resource   String?     // z.B. "Employee", "Device", "Credential"
+  resourceId String?
+  details    Json?       // { before: {...}, after: {...}, changes: [...] }
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+// ============================================================
+// TICKET NUMBER COUNTER (per Tenant)
+// ============================================================
+
+model TicketCounter {
+  tenantId String @id
+  lastNumber Int   @default(0)
+
+  @@index([tenantId])
+}

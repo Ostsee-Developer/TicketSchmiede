@@ -1,0 +1,120 @@
+version: "3.9"
+
+# ============================================================
+# Ticket Schmiede - Production Docker Compose
+# ============================================================
+
+networks:
+  ticketschmiede_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  minio_data:
+    driver: local
+
+services:
+  # ----------------------------------------------------------
+  # PostgreSQL Database
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: ticketschmiede_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ticketschmiede}
+      POSTGRES_USER: ${POSTGRES_USER:-ticketschmiede}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ticketschmiede_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ticketschmiede} -d ${POSTGRES_DB:-ticketschmiede}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Do NOT expose port 5432 in production!
+    # ports:
+    #   - "5432:5432"
+
+  # ----------------------------------------------------------
+  # MinIO (S3-compatible file storage) - optional
+  # ----------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: ticketschmiede_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin123}
+    volumes:
+      - minio_data:/data
+    networks:
+      - ticketschmiede_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # MinIO console - restrict in production
+    ports:
+      - "127.0.0.1:9001:9001"
+
+  # ----------------------------------------------------------
+  # Application (Next.js)
+  # ----------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: ticketschmiede_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ticketschmiede}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ticketschmiede}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Ticket Schmiede}
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-25}
+      # MinIO / S3
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      S3_BUCKET: ${S3_BUCKET:-ticketschmiede}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_USE_SSL: "false"
+      # Seed
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@ticketschmiede.de}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Admin}
+      # Security
+      SESSION_DURATION: ${SESSION_DURATION:-28800}
+      MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS:-5}
+      LOCKOUT_DURATION: ${LOCKOUT_DURATION:-15}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-365}
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - ticketschmiede_net
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
