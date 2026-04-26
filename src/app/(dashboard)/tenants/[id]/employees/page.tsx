@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import Link from "next/link";
+import { DeleteButton } from "@/components/ui/DeleteButton";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -151,12 +152,10 @@ export default async function TenantEmployeesPage({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/tenants/${id}/employees/${e.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                  >
-                    Details →
-                  </Link>
+                  <div className="flex items-center justify-end gap-3">
+                    <Link href={`/tenants/${id}/employees/${e.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Details →</Link>
+                    <DeleteButton apiPath={`/api/employees/${e.id}`} confirmText={`${e.firstName} ${e.lastName} löschen?`} />
+                  </div>
                 </td>
               </tr>
             ))}

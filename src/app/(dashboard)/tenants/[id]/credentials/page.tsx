@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { DeleteButton } from "@/components/ui/DeleteButton";
 
 interface Credential {
   id: string;
@@ -18,6 +19,7 @@ interface Credential {
 export default function CredentialsPage() {
   const params = useParams<{ id: string }>();
   const tenantId = params.id;
+  const router = useRouter();
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loading, setLoading] = useState(true);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
@@ -148,12 +150,10 @@ export default function CredentialsPage() {
                     </a>
                   )}
                 </div>
-                <Link
-                  href={`/tenants/${tenantId}/credentials/${c.id}`}
-                  className="shrink-0 text-xs text-gray-400 hover:text-blue-600"
-                >
-                  Bearbeiten
-                </Link>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link href={`/tenants/${tenantId}/credentials/${c.id}`} className="text-xs text-gray-400 hover:text-blue-600">Bearbeiten</Link>
+                  <DeleteButton apiPath={`/api/credentials/${c.id}`} confirmText={`${c.name} löschen?`} onSuccess={() => { setCredentials((prev) => prev.filter((x) => x.id !== c.id)); }} />
+                </div>
               </div>
             </div>
           ))}

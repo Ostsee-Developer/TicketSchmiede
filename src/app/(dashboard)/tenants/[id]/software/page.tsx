@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
+import { DeleteButton } from "@/components/ui/DeleteButton";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -127,12 +128,10 @@ export default async function TenantSoftwarePage({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/tenants/${id}/software/${s.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                    >
-                      Details →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <Link href={`/tenants/${id}/software/${s.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Details →</Link>
+                      <DeleteButton apiPath={`/api/software/${s.id}`} confirmText={`${s.name} löschen?`} />
+                    </div>
                   </td>
                 </tr>
               );
