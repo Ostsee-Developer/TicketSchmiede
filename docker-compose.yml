@@ -82,7 +82,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-ticketschmiede}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ticketschmiede}?schema=public
       AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       AUTH_TRUST_HOST: "true"
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}

@@ -27,15 +27,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Passwort", type: "password" },
       },
       async authorize(credentials, request) {
+        try {
         const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        if (!parsed.success) {
+          console.error("[auth] Schema validation failed:", parsed.error.flatten());
+          return null;
+        }
 
         const { email, password } = parsed.data;
-        const { ipAddress, userAgent } = getClientInfo(request as Request);
+        let ipAddress: string | null = null;
+        let userAgent: string | null = null;
+        try {
+          const info = getClientInfo(request as Request);
+          ipAddress = info.ipAddress;
+          userAgent = info.userAgent;
+        } catch (_e) {
+          console.warn("[auth] getClientInfo failed, continuing without IP/UA");
+        }
         const maxAttempts = Number(process.env.MAX_LOGIN_ATTEMPTS ?? 5);
         const lockoutMinutes = Number(process.env.LOCKOUT_DURATION ?? 15);
 
         const user = await prisma.user.findUnique({ where: { email } });
+        console.log(`[auth] Login attempt: ${email} → found=${!!user} active=${user?.isActive ?? "n/a"}`);
 
         if (!user || !user.isActive) {
           await createAuditLog({
@@ -125,6 +138,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           isSuperAdmin: user.isSuperAdmin,
         };
+        } catch (err) {
+          console.error("[auth] Unexpected error in authorize:", err);
+          return null;
+        }
       },
     }),
   ],
