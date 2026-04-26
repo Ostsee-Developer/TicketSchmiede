@@ -1,4 +1,4 @@
-import { AuditAction } from "@prisma/client";
+import { AuditAction, Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 interface AuditOptions {
@@ -23,7 +23,7 @@ export async function createAuditLog(options: AuditOptions): Promise<void> {
         action: options.action,
         resource: options.resource ?? null,
         resourceId: options.resourceId ?? null,
-        details: options.details ?? null,
+        details: options.details ?? Prisma.JsonNull,
         ipAddress: options.ipAddress ?? null,
         userAgent: options.userAgent ?? null,
       },
