@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
-import { can, isCustomerRole } from "@/lib/permissions";
+import { isCustomerRole } from "@/lib/permissions";
 import { ok, created, unauthorized, forbidden, serverError, handleZodError, getPagination } from "@/lib/api";
 import { auth } from "@/lib/auth";
 
