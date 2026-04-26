@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Mandanten" };
 

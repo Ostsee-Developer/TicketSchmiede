@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import Link from "next/link";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -90,12 +90,12 @@ export default async function TenantTicketsPage({
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
-        {[
+        {([
           { label: "Alle", params: {} },
           { label: "Neu", params: { status: "NEW" } },
           { label: "In Bearbeitung", params: { status: "IN_PROGRESS" } },
           { label: "Kritisch", params: { priority: "CRITICAL" } },
-        ].map((f) => {
+        ] as { label: string; params: Record<string, string> }[]).map((f) => {
           const isActive = JSON.stringify(f.params) === JSON.stringify(sp);
           return (
             <Link

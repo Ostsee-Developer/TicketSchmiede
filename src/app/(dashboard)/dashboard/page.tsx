@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserTenants } from "@/lib/tenant";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
 
