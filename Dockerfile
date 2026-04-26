@@ -27,7 +27,6 @@ COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Build requires a placeholder DATABASE_URL for Prisma
 ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ENV DATABASE_URL=${DATABASE_URL}
 
