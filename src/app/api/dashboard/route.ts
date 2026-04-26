@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
     if (!can.viewAdminDashboard(ctx.role)) return forbidden();
 
     const now = new Date();
-    const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const ninetyDays = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
     const [

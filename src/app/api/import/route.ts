@@ -1,26 +1,15 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
 import ExcelJS from "exceljs";
-import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { can } from "@/lib/permissions";
 import { ok, unauthorized, forbidden, badRequest, serverError } from "@/lib/api";
-
-const optionsSchema = z.object({
-  tenantId: z.string().cuid(),
-  updateExisting: z.boolean().default(true),
-  skipErrors: z.boolean().default(false),
-  preview: z.boolean().default(false),
-});
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const tenantId = formData.get("tenantId") as string;
-    const updateExisting = formData.get("updateExisting") === "true";
-    const skipErrors = formData.get("skipErrors") === "true";
     const preview = formData.get("preview") === "true";
 
     if (!file || !tenantId) return badRequest("Datei und tenantId sind erforderlich");

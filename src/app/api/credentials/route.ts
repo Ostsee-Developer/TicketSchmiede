@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { can } from "@/lib/permissions";
-import { encrypt, encryptIfPresent } from "@/lib/encryption";
+import { encrypt } from "@/lib/encryption";
 import { ok, created, unauthorized, forbidden, serverError, handleZodError, getPagination } from "@/lib/api";
 
 const createSchema = z.object({
