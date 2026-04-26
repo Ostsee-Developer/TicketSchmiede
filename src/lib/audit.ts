@@ -23,7 +23,7 @@ export async function createAuditLog(options: AuditOptions): Promise<void> {
         action: options.action,
         resource: options.resource ?? null,
         resourceId: options.resourceId ?? null,
-        details: options.details ?? Prisma.JsonNull,
+        details: options.details ? (options.details as Prisma.InputJsonObject) : Prisma.JsonNull,
         ipAddress: options.ipAddress ?? null,
         userAgent: options.userAgent ?? null,
       },
