@@ -68,7 +68,7 @@ ENV HOSTNAME="0.0.0.0"
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Run migrations then start
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node_modules/.bin/tsx prisma/seed.ts && node server.js"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
