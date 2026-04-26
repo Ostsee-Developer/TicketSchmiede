@@ -72,12 +72,7 @@ services:
   # Application (Next.js)
   # ----------------------------------------------------------
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runner
-      args:
-        DATABASE_URL: postgresql://${POSTGRES_USER:-ticketschmiede}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ticketschmiede}?schema=public
+    image: ghcr.io/ostsee-developer/ticketschmiede:latest
     container_name: ticketschmiede_app
     restart: unless-stopped
     depends_on:
