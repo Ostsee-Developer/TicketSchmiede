@@ -72,10 +72,7 @@ services:
   # Application (Next.js)
   # ----------------------------------------------------------
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runner
+    image: ghcr.io/ostsee-developer/ticketschmiede:latest
     container_name: ticketschmiede_app
     restart: unless-stopped
     depends_on:
