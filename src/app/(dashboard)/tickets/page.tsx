@@ -55,7 +55,7 @@ export default async function TicketsPage() {
         category: true,
         createdAt: true,
         tenant: { select: { id: true, name: true } },
-        assignedTo: { select: { name: true } },
+        technician: { select: { name: true } },
       },
     });
   } else {
@@ -80,7 +80,7 @@ export default async function TicketsPage() {
         category: true,
         createdAt: true,
         tenant: { select: { id: true, name: true } },
-        assignedTo: { select: { name: true } },
+        technician: { select: { name: true } },
       },
     });
   }
@@ -149,7 +149,7 @@ export default async function TicketsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {ticket.assignedTo?.name ?? <span className="text-gray-300">Nicht zugewiesen</span>}
+                    {ticket.technician?.name ?? <span className="text-gray-300">Nicht zugewiesen</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">
                     {formatDateTime(ticket.createdAt)}
