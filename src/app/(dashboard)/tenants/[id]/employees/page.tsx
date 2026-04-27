@@ -3,6 +3,9 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import Link from "next/link";
+import { Plus, Wand2, Users, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,13 +13,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: `${tenant?.name ?? ""} – Mitarbeiter` };
 }
 
-const statusBadge = (status: string) => ({
-  ACTIVE: "bg-green-100 text-green-700",
-  DISABLED: "bg-gray-100 text-gray-500",
-  LEFT: "bg-red-100 text-red-600",
-}[status] ?? "bg-gray-100 text-gray-600");
+const statusBadgeVariant = (status: string) =>
+  ({ ACTIVE: "success", DISABLED: "muted", LEFT: "destructive" } as const)[status] ?? "muted";
 
-const statusLabel = (s: string) => ({ ACTIVE: "Aktiv", DISABLED: "Deaktiviert", LEFT: "Ausgeschieden" }[s] ?? s);
+const statusLabel = (s: string) =>
+  ({ ACTIVE: "Aktiv", DISABLED: "Deaktiviert", LEFT: "Ausgeschieden" }[s] ?? s);
 
 export default async function TenantEmployeesPage({
   params,
@@ -61,108 +62,196 @@ export default async function TenantEmployeesPage({
     },
   });
 
+  const statusFilters = [
+    { label: "Alle", status: undefined },
+    { label: "Aktiv", status: "ACTIVE" },
+    { label: "Deaktiviert", status: "DISABLED" },
+    { label: "Ausgeschieden", status: "LEFT" },
+  ];
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-            <Link href={`/tenants/${id}/dashboard`} className="hover:text-blue-600">{tenant.name}</Link>
-            <span>/</span>
-            <span>Mitarbeiter</span>
+    <div>
+      <PageHeader
+        title="Mitarbeiter"
+        subtitle={`${employees.length} Einträge${sp.status ? ` · gefiltert nach ${statusLabel(sp.status)}` : ""}`}
+        breadcrumbs={[
+          { label: tenant.name, href: `/tenants/${id}/dashboard` },
+          { label: "Mitarbeiter" },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/tenants/${id}/employees/wizard`}
+              className="inline-flex items-center gap-1.5 text-sm font-medium border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 px-3 py-2 rounded-lg transition-all"
+            >
+              <Wand2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Wizard</span>
+            </Link>
+            <Link
+              href={`/tenants/${id}/employees/new`}
+              className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary/90 transition-all shadow-sm active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Neuer Mitarbeiter</span>
+              <span className="sm:hidden">Neu</span>
+            </Link>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Mitarbeiter</h1>
-          <p className="text-gray-400 text-sm">{employees.length} Einträge</p>
-        </div>
-        <Link
-          href={`/tenants/${id}/employees/new`}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Neuer Mitarbeiter
-        </Link>
-      </div>
+        }
+      />
 
       {/* Status Filter */}
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { label: "Alle", status: undefined },
-          { label: "Aktiv", status: "ACTIVE" },
-          { label: "Deaktiviert", status: "DISABLED" },
-          { label: "Ausgeschieden", status: "LEFT" },
-        ].map((f) => (
-          <Link
-            key={f.label}
-            href={`/tenants/${id}/employees${f.status ? `?status=${f.status}` : ""}`}
-            className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              sp.status === f.status || (!sp.status && !f.status)
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:border-blue-300"
-            }`}
-          >
-            {f.label}
-          </Link>
-        ))}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {statusFilters.map((f) => {
+          const isActive = sp.status === f.status || (!sp.status && !f.status);
+          return (
+            <Link
+              key={f.label}
+              href={`/tenants/${id}/employees${f.status ? `?status=${f.status}` : ""}`}
+              className={[
+                "text-sm px-3 py-1.5 rounded-lg font-medium transition-all",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-card border border-border text-muted-foreground hover:border-primary/30 hover:text-foreground",
+              ].join(" ")}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Position / Abteilung</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">E-Mail</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Standort</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Arbeitsplatz</th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-700">Geräte</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {employees.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">Keine Mitarbeiter gefunden</td>
-              </tr>
-            )}
+      {employees.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-12 text-center shadow-card">
+          <Users className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="font-medium text-foreground mb-1">Keine Mitarbeiter gefunden</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {sp.status ? "Versuche einen anderen Filter" : "Lege den ersten Mitarbeiter an"}
+          </p>
+          <Link
+            href={`/tenants/${id}/employees/wizard`}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary/90 transition-all"
+          >
+            <Wand2 className="w-4 h-4" />
+            Mit Wizard anlegen
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* ── Desktop Table ── */}
+          <div className="hidden lg:block rounded-xl border border-border bg-card overflow-hidden shadow-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Mitarbeiter
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Position / Abteilung
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    E-Mail
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Standort
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Geräte
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {employees.map((e) => (
+                  <tr key={e.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                          {e.firstName[0]}{e.lastName[0]}
+                        </div>
+                        <span className="font-medium text-foreground">
+                          {e.lastName}, {e.firstName}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {[e.position, e.department].filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">{e.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                      {e.location?.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-center text-muted-foreground text-sm">
+                      {e._count.devices}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={statusBadgeVariant(e.status)} dot>
+                        {statusLabel(e.status)}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/tenants/${id}/employees/${e.id}`}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                      >
+                        Details
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Mobile Card List ── */}
+          <div className="lg:hidden rounded-xl border border-border bg-card overflow-hidden shadow-card divide-y divide-border">
             {employees.map((e) => (
-              <tr key={e.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                      {e.firstName[0]}{e.lastName[0]}
-                    </div>
-                    <span className="font-medium text-gray-900">
-                      {e.lastName}, {e.firstName}
-                    </span>
+              <Link
+                key={e.id}
+                href={`/tenants/${id}/employees/${e.id}`}
+                className="flex items-center gap-3 p-4 hover:bg-muted/20 transition-colors"
+              >
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                  {e.firstName[0]}{e.lastName[0]}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="font-semibold text-sm text-foreground truncate">
+                      {e.firstName} {e.lastName}
+                    </p>
+                    <Badge variant={statusBadgeVariant(e.status)} size="sm" dot>
+                      {statusLabel(e.status)}
+                    </Badge>
                   </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600">
-                  {[e.position, e.department].filter(Boolean).join(" · ") || "—"}
-                </td>
-                <td className="px-4 py-3 text-gray-600 text-xs">{e.email ?? "—"}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{e.location?.name ?? "—"}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{e.workstation?.name ?? "—"}</td>
-                <td className="px-4 py-3 text-center text-gray-500">{e._count.devices}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(e.status)}`}>
-                    {statusLabel(e.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/tenants/${id}/employees/${e.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                  >
-                    Details →
-                  </Link>
-                </td>
-              </tr>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {[e.position, e.department].filter(Boolean).join(" · ") || (e.email ?? "—")}
+                  </p>
+                  {(e.location || e._count.devices > 0) && (
+                    <div className="flex items-center gap-2 mt-1">
+                      {e.location && (
+                        <span className="text-2xs text-muted-foreground/70">{e.location.name}</span>
+                      )}
+                      {e._count.devices > 0 && (
+                        <span className="text-2xs text-muted-foreground/70">
+                          {e._count.devices} Gerät{e._count.devices !== 1 ? "e" : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+              </Link>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
