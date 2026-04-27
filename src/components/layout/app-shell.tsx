@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { type ReactNode, useState, useEffect, useCallback } from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
 interface AppShellProps {
-  children: React.ReactNode;
+  children: ReactNode;
   sidebarProps: {
     tenantId?: string;
     tenantName?: string;

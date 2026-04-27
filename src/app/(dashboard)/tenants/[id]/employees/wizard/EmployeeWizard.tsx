@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { type ReactNode, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -198,7 +198,7 @@ function Field({
   error?: string;
   required?: boolean;
   hint?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
