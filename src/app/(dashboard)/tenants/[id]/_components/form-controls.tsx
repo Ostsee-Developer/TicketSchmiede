@@ -125,21 +125,27 @@ export function Textarea({
   defaultValue,
   rows = 4,
   placeholder,
+  required,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   rows?: number;
   placeholder?: string;
+  required?: boolean;
 }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-foreground mb-1.5">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </span>
       <textarea
         name={name}
         defaultValue={defaultValue ?? ""}
         rows={rows}
         placeholder={placeholder}
+        required={required}
         className="flex w-full rounded-lg border border-input bg-card px-3 py-2 text-sm placeholder:text-muted-foreground resize-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent"
       />
     </label>

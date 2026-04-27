@@ -37,7 +37,7 @@ export default async function NewTicketPage({ params }: { params: Promise<{ id: 
             <SelectInput label="Arbeitsplatz" name="workstationId" options={[{ value: "", label: "Nicht zugeordnet" }, ...workstations.map((w) => ({ value: w.id, label: w.name }))]} />
             <SelectInput label="Gerät" name="deviceId" options={[{ value: "", label: "Nicht zugeordnet" }, ...devices.map((d) => ({ value: d.id, label: [d.hostname, d.manufacturer, d.model, d.type].filter(Boolean).join(" · ") }))]} />
           </div>
-          <Textarea label="Beschreibung" name="description" rows={8} />
+          <Textarea label="Beschreibung" name="description" rows={8} required />
           <div className="flex justify-end"><SubmitButton>Ticket anlegen</SubmitButton></div>
         </Card>
       </form>
