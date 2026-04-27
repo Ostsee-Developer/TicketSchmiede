@@ -10,7 +10,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
-RUN npm ci --frozen-lockfile
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 RUN npx prisma generate
 
 # Stage 2: Builder
