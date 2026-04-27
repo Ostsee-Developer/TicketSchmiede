@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { authenticator } from "otplib";
 import QRCode from "qrcode";
-import { encrypt } from "@/lib/encryption";
 import { ok, unauthorized, serverError } from "@/lib/api";
 import { randomBytes } from "crypto";
 

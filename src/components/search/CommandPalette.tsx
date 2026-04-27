@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   type KeyboardEvent,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -86,40 +87,44 @@ export function CommandPalette({ isOpen, onClose, tenantId }: Props) {
   const effectiveTenantId =
     tenantId ?? pathname.match(/^\/tenants\/([^/]+)/)?.[1];
 
-  const flatResults = results
-    ? [
-        ...results.employees.map((e) => ({
-          type: "employee" as const,
-          id: e.id,
-          label: `${e.firstName} ${e.lastName}`,
-          sub: e.position ?? e.department ?? e.email ?? "",
-          status: e.status,
-          href: effectiveTenantId
-            ? `/tenants/${effectiveTenantId}/employees/${e.id}`
-            : "#",
-        })),
-        ...results.devices.map((d) => ({
-          type: "device" as const,
-          id: d.id,
-          label: [d.manufacturer, d.model].filter(Boolean).join(" ") || d.type,
-          sub: d.hostname ?? d.type,
-          status: d.status,
-          href: effectiveTenantId
-            ? `/tenants/${effectiveTenantId}/devices/${d.id}`
-            : "#",
-        })),
-        ...results.tickets.map((t) => ({
-          type: "ticket" as const,
-          id: t.id,
-          label: t.title,
-          sub: `#${t.number}`,
-          status: t.status,
-          href: effectiveTenantId
-            ? `/tenants/${effectiveTenantId}/tickets/${t.id}`
-            : "#",
-        })),
-      ]
-    : [];
+  const flatResults = useMemo(
+    () =>
+      results
+        ? [
+            ...results.employees.map((e) => ({
+              type: "employee" as const,
+              id: e.id,
+              label: `${e.firstName} ${e.lastName}`,
+              sub: e.position ?? e.department ?? e.email ?? "",
+              status: e.status,
+              href: effectiveTenantId
+                ? `/tenants/${effectiveTenantId}/employees/${e.id}`
+                : "#",
+            })),
+            ...results.devices.map((d) => ({
+              type: "device" as const,
+              id: d.id,
+              label: [d.manufacturer, d.model].filter(Boolean).join(" ") || d.type,
+              sub: d.hostname ?? d.type,
+              status: d.status,
+              href: effectiveTenantId
+                ? `/tenants/${effectiveTenantId}/devices/${d.id}`
+                : "#",
+            })),
+            ...results.tickets.map((t) => ({
+              type: "ticket" as const,
+              id: t.id,
+              label: t.title,
+              sub: `#${t.number}`,
+              status: t.status,
+              href: effectiveTenantId
+                ? `/tenants/${effectiveTenantId}/tickets/${t.id}`
+                : "#",
+            })),
+          ]
+        : [],
+    [results, effectiveTenantId]
+  );
 
   useEffect(() => {
     if (!isOpen) {

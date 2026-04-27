@@ -32,12 +32,6 @@ export async function POST(request: NextRequest) {
 
     const { ipAddress, userAgent } = getClientInfo(request);
 
-    // Store encrypted secret and hashed backup codes
-    const { createHash } = await import("crypto");
-    const hashedBackupCodes = backupCodes.map((c) =>
-      createHash("sha256").update(c.replace(/-/g, "")).digest("hex")
-    );
-
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
