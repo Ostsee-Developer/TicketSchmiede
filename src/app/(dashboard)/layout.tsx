@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default async function DashboardLayout({
   children,
@@ -14,11 +14,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar isSuperAdmin={session.user.isSuperAdmin} />
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 max-w-7xl mx-auto">{children}</div>
-      </main>
-    </div>
+    <AppShell
+      sidebarProps={{
+        isSuperAdmin: session.user.isSuperAdmin,
+        userName: session.user.name ?? undefined,
+        userEmail: session.user.email ?? undefined,
+      }}
+    >
+      {children}
+    </AppShell>
   );
 }

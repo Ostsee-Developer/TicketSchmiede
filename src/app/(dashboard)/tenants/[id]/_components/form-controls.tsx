@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
 export function PageHeader({
   tenantName,
@@ -8,6 +9,7 @@ export function PageHeader({
   title,
   subtitle,
   backHref,
+  actions,
 }: {
   tenantName: string;
   tenantId: string;
@@ -15,36 +17,70 @@ export function PageHeader({
   title: string;
   subtitle?: string;
   backHref?: string;
+  actions?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between mb-6">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-          <Link href={`/tenants/${tenantId}/dashboard`} className="hover:text-blue-600">
+        <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-1.5" aria-label="Breadcrumb">
+          <Link href={`/tenants/${tenantId}/dashboard`} className="hover:text-primary transition-colors">
             {tenantName}
           </Link>
-          <span>/</span>
-          <Link href={backHref ?? `/tenants/${tenantId}`} className="hover:text-blue-600">
-            {section}
-          </Link>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        {subtitle && <p className="text-gray-400 text-sm mt-1">{subtitle}</p>}
+          <ChevronRight className="w-3 h-3" />
+          {backHref ? (
+            <Link href={backHref} className="hover:text-primary transition-colors">
+              {section}
+            </Link>
+          ) : (
+            <span className="text-foreground font-medium">{section}</span>
+          )}
+        </nav>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{title}</h1>
+        {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
       </div>
-      {backHref && (
-        <Link
-          href={backHref}
-          className="text-sm bg-white border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-lg text-gray-600 transition-colors"
-        >
-          Zurück
-        </Link>
+      {(backHref || actions) && (
+        <div className="flex items-center gap-2 mt-3 sm:mt-0 shrink-0">
+          {actions}
+          {backHref && !actions && (
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border bg-card hover:bg-accent px-3 py-2 rounded-lg transition-colors"
+            >
+              Zurück
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className}`}>{children}</div>;
+  return (
+    <div className={`bg-card rounded-xl border border-border p-5 shadow-card ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="text-base font-semibold text-foreground mb-4">{children}</h2>
+  );
+}
+
+export function FormGrid({ children, cols = 2 }: { children: ReactNode; cols?: 1 | 2 | 3 }) {
+  return (
+    <div
+      className={`grid gap-4 ${
+        cols === 1 ? "grid-cols-1" :
+        cols === 2 ? "grid-cols-1 sm:grid-cols-2" :
+        "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      }`}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function TextInput({
@@ -54,6 +90,7 @@ export function TextInput({
   type = "text",
   required = false,
   placeholder,
+  hint,
 }: {
   label: string;
   name: string;
@@ -61,18 +98,23 @@ export function TextInput({
   type?: string;
   required?: boolean;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </span>
       <input
         name={name}
         type={type}
         required={required}
         defaultValue={defaultValue ?? ""}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        className="flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1 text-sm placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50"
       />
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
     </label>
   );
 }
@@ -82,20 +124,23 @@ export function Textarea({
   name,
   defaultValue,
   rows = 4,
+  placeholder,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   rows?: number;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1.5">{label}</span>
       <textarea
         name={name}
         defaultValue={defaultValue ?? ""}
         rows={rows}
-        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        placeholder={placeholder}
+        className="flex w-full rounded-lg border border-input bg-card px-3 py-2 text-sm placeholder:text-muted-foreground resize-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent"
       />
     </label>
   );
@@ -106,19 +151,25 @@ export function SelectInput({
   name,
   defaultValue,
   options,
+  required,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   options: { value: string; label: string }[];
+  required?: boolean;
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </span>
       <select
         name={name}
         defaultValue={defaultValue ?? ""}
-        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 bg-white"
+        required={required}
+        className="flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1 text-sm transition-colors appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent"
       >
         {options.map((option) => (
           <option key={option.value || "empty"} value={option.value}>
@@ -134,7 +185,7 @@ export function SubmitButton({ children = "Speichern" }: { children?: ReactNode 
   return (
     <button
       type="submit"
-      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shadow-sm"
     >
       {children}
     </button>
@@ -145,10 +196,18 @@ export function DeleteButton({ children = "Löschen" }: { children?: ReactNode }
   return (
     <button
       type="submit"
-      className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors"
+      className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition-all active:scale-[0.98]"
     >
       {children}
     </button>
+  );
+}
+
+export function FormActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 pt-5 mt-5 border-t border-border">
+      {children}
+    </div>
   );
 }
 
