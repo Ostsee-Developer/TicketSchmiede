@@ -49,9 +49,12 @@ export async function GET(request: NextRequest) {
       return ok({ data: tenants, total: tenants.length, page: 1, limit: tenants.length, totalPages: 1 });
     }
 
+    const baseWhere = { deletedAt: null };
     const [data, total] = await Promise.all([
       prisma.tenant.findMany({
-        where: search ? { name: { contains: search, mode: "insensitive" } } : {},
+        where: search
+          ? { ...baseWhere, name: { contains: search, mode: "insensitive" } }
+          : baseWhere,
         skip,
         take: limit,
         orderBy: { name: "asc" },
@@ -62,7 +65,9 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.tenant.count({
-        where: search ? { name: { contains: search, mode: "insensitive" } } : {},
+        where: search
+          ? { ...baseWhere, name: { contains: search, mode: "insensitive" } }
+          : baseWhere,
       }),
     ]);
 

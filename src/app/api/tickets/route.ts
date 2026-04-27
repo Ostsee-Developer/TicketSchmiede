@@ -6,6 +6,7 @@ import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { isCustomerRole } from "@/lib/permissions";
 import { ok, created, unauthorized, forbidden, serverError, handleZodError, getPagination } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
 
 const createTicketSchema = z.object({
   tenantId: z.string().cuid(),
@@ -124,6 +125,22 @@ export async function POST(request: NextRequest) {
       ipAddress,
       userAgent,
     });
+
+    // Fire-and-forget notification
+    const tenant = await prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { name: true } });
+    dispatchNotification({
+      event: "ticket.created",
+      tenantId: ctx.tenantId,
+      tenantName: tenant?.name,
+      data: {
+        number: ticket.number,
+        title: ticket.title,
+        priority: ticket.priority,
+        status: ticket.status,
+        category: ticket.category,
+      },
+      timestamp: new Date().toISOString(),
+    }).catch(() => {});
 
     return created(ticket);
   } catch (error) {

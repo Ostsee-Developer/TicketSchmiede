@@ -15,6 +15,22 @@ const deviceTypes = [
   ["ACCESS_POINT", "Access Point"], ["UPS", "USV"], ["OTHER", "Sonstiges"],
 ] as const;
 
+const osOptions = [
+  { value: "", label: "Kein Betriebssystem" },
+  { value: "WINDOWS_10", label: "Windows 10" },
+  { value: "WINDOWS_11", label: "Windows 11" },
+  { value: "WINDOWS_SERVER_2019", label: "Windows Server 2019" },
+  { value: "WINDOWS_SERVER_2022", label: "Windows Server 2022" },
+  { value: "WINDOWS_SERVER_2025", label: "Windows Server 2025" },
+  { value: "MACOS", label: "macOS" },
+  { value: "LINUX", label: "Linux" },
+  { value: "UBUNTU", label: "Ubuntu" },
+  { value: "DEBIAN", label: "Debian" },
+  { value: "CENTOS", label: "CentOS" },
+  { value: "RHEL", label: "Red Hat Enterprise Linux" },
+  { value: "OTHER", label: "Sonstiges" },
+];
+
 export default async function DeviceDetailPage({ params }: { params: Promise<{ id: string; deviceId: string }> }) {
   const { id, deviceId } = await params;
   const session = await auth();
@@ -65,7 +81,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
                 <TextInput label="Hostname" name="hostname" defaultValue={device.hostname} />
                 <TextInput label="IP-Adresse" name="ipAddress" defaultValue={device.ipAddress} />
                 <TextInput label="MAC-Adresse" name="macAddress" defaultValue={device.macAddress} />
-                <TextInput label="Betriebssystem" name="os" defaultValue={device.os} />
+                <SelectInput label="Betriebssystem" name="os" defaultValue={device.os ?? ""} options={osOptions} />
                 <TextInput label="OS-Version" name="osVersion" defaultValue={device.osVersion} />
                 <TextInput label="Kaufdatum" name="purchaseDate" type="date" defaultValue={formatInputDate(device.purchaseDate)} />
                 <TextInput label="Garantie bis" name="warrantyUntil" type="date" defaultValue={formatInputDate(device.warrantyUntil)} />
