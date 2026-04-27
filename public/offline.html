@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline – Ticket Schmiede</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      background: white;
+      border-radius: 1rem;
+      padding: 2.5rem;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.07);
+    }
+    .icon {
+      width: 64px;
+      height: 64px;
+      background: #dbeafe;
+      border-radius: 1rem;
+      margin: 0 auto 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: .5rem; }
+    p { font-size: .875rem; color: #6b7280; line-height: 1.6; margin-bottom: 1.5rem; }
+    .btn {
+      display: inline-block;
+      background: #2563eb;
+      color: white;
+      font-size: .875rem;
+      font-weight: 600;
+      padding: .625rem 1.25rem;
+      border-radius: .75rem;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .2s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .brand {
+      margin-top: 1.5rem;
+      font-size: .75rem;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">
+      <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#2563eb" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 15.5A8.38 8.38 0 0112 3a8.38 8.38 0 019 12.5M12 21v-6m0 0l-3 3m3-3l3 3" />
+      </svg>
+    </div>
+    <h1>Keine Internetverbindung</h1>
+    <p>
+      Es scheint, als ob du gerade offline bist.<br />
+      Bitte überprüfe deine Netzwerkverbindung und versuche es erneut.
+    </p>
+    <button class="btn" onclick="location.reload()">Erneut versuchen</button>
+    <p class="brand">Ticket Schmiede</p>
+  </div>
+</body>
+</html>

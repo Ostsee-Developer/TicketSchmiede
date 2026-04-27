@@ -1,4 +1,5 @@
 import type { NotificationPayload, WebhookConfig } from "./types";
+import { sendEmailNotification } from "./email";
 
 /**
  * Dispatch a notification event to all configured webhooks.
@@ -10,7 +11,28 @@ export async function dispatchNotification(payload: NotificationPayload): Promis
     (c) => c.enabled && c.events.includes(payload.event)
   );
 
-  await Promise.allSettled(relevant.map((config) => sendToWebhook(config, payload)));
+  const emailRecipients = getEmailRecipients(payload.event);
+
+  await Promise.allSettled([
+    ...relevant.map((config) => sendToWebhook(config, payload)),
+    ...(emailRecipients.length > 0
+      ? [sendEmailNotification(payload, emailRecipients).catch((e) => console.error("[Notifications] Email failed:", e))]
+      : []),
+  ]);
+}
+
+function getEmailRecipients(event: string): string[] {
+  const envKey = "NOTIFICATION_EMAIL_RECIPIENTS";
+  const envEvents = "NOTIFICATION_EMAIL_EVENTS";
+  const recipients = process.env[envKey];
+  if (!recipients) return [];
+
+  const allowedEvents = process.env[envEvents]
+    ? process.env[envEvents].split(",").map((e) => e.trim())
+    : ["ticket.created", "ticket.resolved", "ticket.closed", "user.locked"];
+
+  if (!allowedEvents.includes(event)) return [];
+  return recipients.split(",").map((r) => r.trim()).filter(Boolean);
 }
 
 async function sendToWebhook(config: WebhookConfig, payload: NotificationPayload): Promise<void> {
@@ -24,6 +46,11 @@ async function sendToWebhook(config: WebhookConfig, payload: NotificationPayload
         break;
       case "generic":
         await sendGeneric(config.url!, payload);
+        break;
+      case "email":
+        if (config.email) {
+          await sendEmailNotification(payload, [config.email]);
+        }
         break;
       default:
         console.warn(`[Notifications] Unknown webhook type: ${config.type}`);

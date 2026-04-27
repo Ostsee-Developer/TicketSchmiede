@@ -21,6 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Search,
+  Settings,
 } from "lucide-react";
 
 interface NavItem {
@@ -45,6 +47,7 @@ interface SidebarProps {
   mobileOpen?: boolean;
   onToggleCollapse?: () => void;
   onCloseMobile?: () => void;
+  onOpenSearch?: () => void;
 }
 
 export function Sidebar({
@@ -57,6 +60,7 @@ export function Sidebar({
   mobileOpen = false,
   onToggleCollapse,
   onCloseMobile,
+  onOpenSearch,
 }: SidebarProps) {
   const pathname = usePathname();
 
@@ -92,6 +96,7 @@ export function Sidebar({
     ...(isSuperAdmin ? [{ label: "Mandanten", href: "/tenants", icon: Building2 }] : []),
     { label: "Benutzer", href: "/users", icon: UserCog },
     { label: "Audit-Log", href: "/audit-log", icon: ScrollText },
+    { label: "Sicherheit", href: "/settings/security", icon: Settings },
   ];
 
   const sections: NavSection[] = [
@@ -157,6 +162,30 @@ export function Sidebar({
           </button>
         )}
       </div>
+
+      {/* ── Search ── */}
+      {onOpenSearch && (
+        <div className="px-2 py-2 border-b border-sidebar-border">
+          <button
+            onClick={onOpenSearch}
+            title={collapsed ? "Suchen (Ctrl+K)" : undefined}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+              "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              collapsed && "lg:justify-center lg:px-0",
+            )}
+            aria-label="Suchen"
+          >
+            <Search className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">Suchen…</span>
+                <kbd className="hidden lg:inline-block text-2xs bg-sidebar-accent px-1.5 py-0.5 rounded font-mono opacity-60">⌘K</kbd>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">

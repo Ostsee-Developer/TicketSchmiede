@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 interface TopbarProps {
   onMenuClick: () => void;
+  onSearchClick?: () => void;
 }
 
 const routeLabels: Record<string, string> = {
@@ -34,13 +35,14 @@ function usePageTitle() {
       software: "Software",
       credentials: "Zugangsdaten",
       tickets: "Tickets",
+      settings: "Einstellungen",
     };
     return labels[section] ?? "Übersicht";
   }
   return "Ticket Schmiede";
 }
 
-export function Topbar({ onMenuClick }: TopbarProps) {
+export function Topbar({ onMenuClick, onSearchClick }: TopbarProps) {
   const title = usePageTitle();
 
   return (
@@ -60,13 +62,14 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       {/* Actions */}
       <div className="flex items-center gap-1">
         <button
+          onClick={onSearchClick}
           className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          aria-label="Suchen"
+          aria-label="Suchen (Ctrl+K)"
         >
           <Search className="w-4 h-4" />
         </button>
         <button
-          className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors relative"
           aria-label="Benachrichtigungen"
         >
           <Bell className="w-4 h-4" />

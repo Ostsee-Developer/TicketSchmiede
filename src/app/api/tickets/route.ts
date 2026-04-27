@@ -11,7 +11,7 @@ import { dispatchNotification } from "@/lib/notifications/dispatcher";
 const createTicketSchema = z.object({
   tenantId: z.string().cuid(),
   title: z.string().min(3).max(200),
-  description: z.string().min(10),
+  description: z.string().min(1).optional().default(""),
   category: z.enum(["HARDWARE", "SOFTWARE", "EMAIL", "NETWORK", "USER_ACCOUNT", "PRINTER", "PHONE", "VPN", "OTHER"]).default("OTHER"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
   employeeId: z.string().cuid().optional().nullable(),

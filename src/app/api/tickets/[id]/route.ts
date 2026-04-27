@@ -8,7 +8,7 @@ import { ok, unauthorized, forbidden, notFound, serverError, handleZodError } fr
 
 const updateSchema = z.object({
   title: z.string().min(3).max(200).optional(),
-  description: z.string().min(10).optional(),
+  description: z.string().min(1).optional(),
   status: z.enum(["NEW", "IN_PROGRESS", "WAITING_FOR_CUSTOMER", "RESOLVED", "CLOSED"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   category: z.enum(["HARDWARE", "SOFTWARE", "EMAIL", "NETWORK", "USER_ACCOUNT", "PRINTER", "PHONE", "VPN", "OTHER"]).optional(),

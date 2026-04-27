@@ -3,11 +3,14 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { authenticator } from "otplib";
 import { createAuditLog, getClientInfo } from "./audit";
+import { safeDecrypt } from "./encryption";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  totp: z.string().optional(),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -47,7 +50,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const maxAttempts = Number(process.env.MAX_LOGIN_ATTEMPTS ?? 5);
         const lockoutMinutes = Number(process.env.LOCKOUT_DURATION ?? 15);
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            passwordHash: true,
+            isSuperAdmin: true,
+            isActive: true,
+            twoFactorEnabled: true,
+            twoFactorSecret: true,
+            failedLoginCount: true,
+            lockedUntil: true,
+          },
+        });
         console.log(`[auth] Login attempt: ${email} → found=${!!user} active=${user?.isActive ?? "n/a"}`);
 
         if (!user || !user.isActive) {
@@ -74,6 +91,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        const { totp } = parsed.data;
         const passwordValid = await bcrypt.compare(password, user.passwordHash);
 
         if (!passwordValid) {
@@ -110,6 +128,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
           }
           return null;
+        }
+
+        // Verify TOTP if 2FA is enabled
+        if (user.twoFactorEnabled && user.twoFactorSecret) {
+          const secret = safeDecrypt(user.twoFactorSecret);
+          if (!secret) {
+            console.error("[auth] Failed to decrypt 2FA secret for user:", user.id);
+            return null;
+          }
+          if (!totp || !authenticator.verify({ token: totp, secret })) {
+            await createAuditLog({
+              userId: user.id,
+              userEmail: user.email,
+              action: "LOGIN_FAILED",
+              details: { reason: "invalid_totp" },
+              ipAddress,
+              userAgent,
+            });
+            return null;
+          }
         }
 
         // Successful login

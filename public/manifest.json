@@ -1,0 +1,39 @@
+{
+  "name": "Ticket Schmiede",
+  "short_name": "TicketSchmiede",
+  "description": "IT-Dokumentation & Ticketsystem für IT-Dienstleister",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1e40af",
+  "background_color": "#f8fafc",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Zum Dashboard"
+    },
+    {
+      "name": "Neues Ticket",
+      "url": "/tickets",
+      "description": "Tickets verwalten"
+    }
+  ]
+}
