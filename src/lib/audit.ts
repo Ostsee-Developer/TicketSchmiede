@@ -14,21 +14,35 @@ interface AuditOptions {
 }
 
 export async function createAuditLog(options: AuditOptions): Promise<void> {
+  const data = {
+    tenantId: options.tenantId ?? null,
+    userId: options.userId ?? null,
+    userEmail: options.userEmail ?? null,
+    action: options.action,
+    resource: options.resource ?? null,
+    resourceId: options.resourceId ?? null,
+    details: options.details ? (options.details as Prisma.InputJsonObject) : Prisma.JsonNull,
+    ipAddress: options.ipAddress ?? null,
+    userAgent: options.userAgent ?? null,
+  };
+
   try {
-    await prisma.auditLog.create({
-      data: {
-        tenantId: options.tenantId ?? null,
-        userId: options.userId ?? null,
-        userEmail: options.userEmail ?? null,
-        action: options.action,
-        resource: options.resource ?? null,
-        resourceId: options.resourceId ?? null,
-        details: options.details ? (options.details as Prisma.InputJsonObject) : Prisma.JsonNull,
-        ipAddress: options.ipAddress ?? null,
-        userAgent: options.userAgent ?? null,
-      },
-    });
+    await prisma.auditLog.create({ data });
   } catch (error) {
+    // FK violation on userId (stale JWT after DB reset) — retry without the FK reference.
+    // userEmail is already denormalized so the log entry remains useful.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003" &&
+      String(error.meta?.field_name ?? "").toLowerCase().includes("userid")
+    ) {
+      try {
+        await prisma.auditLog.create({ data: { ...data, userId: null } });
+        return;
+      } catch (_e) {
+        // fall through to error log
+      }
+    }
     // Never let audit log failures break the main flow
     console.error("[AuditLog] Failed to create audit log:", error);
   }
