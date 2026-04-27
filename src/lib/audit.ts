@@ -50,7 +50,7 @@ export function diffObjects(
   after: Record<string, unknown>
 ): string[] {
   const changes: string[] = [];
-  const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
 
   for (const key of allKeys) {
     if (before[key] !== after[key]) {

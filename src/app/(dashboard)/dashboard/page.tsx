@@ -15,7 +15,7 @@ export default async function DashboardPage() {
     prisma.ticket.count({ where: { status: { notIn: ["RESOLVED", "CLOSED"] } } }),
     prisma.ticket.count({ where: { priority: "CRITICAL", status: { notIn: ["RESOLVED", "CLOSED"] } } }),
     prisma.tenant.count({ where: { isActive: true } }),
-    prisma.device.count({ where: { warrantyUntil: { gte: new Date(), lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } } }),
+    prisma.device.count({ where: { warrantyUntil: { gte: new Date(), lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }, status: "ACTIVE" } }),
   ]);
 
   const [openTickets, criticalTickets, activeTenants, expiringWarranties] = stats;

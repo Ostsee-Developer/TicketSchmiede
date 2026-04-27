@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { OsType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
@@ -18,7 +19,7 @@ const deviceSchema = z.object({
   inventoryNumber: z.string().optional().nullable(),
   purchaseDate: z.string().datetime().optional().nullable(),
   warrantyUntil: z.string().datetime().optional().nullable(),
-  os: z.string().optional().nullable(),
+  os: z.nativeEnum(OsType).optional().nullable(),
   osVersion: z.string().optional().nullable(),
   ipAddress: z.string().optional().nullable(),
   macAddress: z.string().optional().nullable(),

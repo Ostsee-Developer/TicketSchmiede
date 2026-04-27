@@ -28,7 +28,13 @@ const roleBadge: Record<string, string> = {
 interface TenantRole {
   id: string;
   role: string;
-  tenant: { name: string };
+  tenant: { id: string; name: string };
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 interface User {
@@ -60,8 +66,14 @@ const editSchema = z.object({
   isSuperAdmin: z.boolean(),
 });
 
+const roleAssignSchema = z.object({
+  tenantId: z.string().min(1, "Mandant wählen"),
+  role: z.enum(["INTERNAL_ADMIN", "TECHNICIAN", "CUSTOMER_ADMIN", "CUSTOMER_USER", "READ_ONLY"]),
+});
+
 type CreateData = z.infer<typeof createSchema>;
 type EditData = z.infer<typeof editSchema>;
+type RoleAssignData = z.infer<typeof roleAssignSchema>;
 
 function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [serverError, setServerError] = useState<string | null>(null);
@@ -173,11 +185,116 @@ function EditModal({ user, onClose, onSuccess }: { user: User; onClose: () => vo
   );
 }
 
+function RoleModal({
+  user,
+  tenants,
+  onClose,
+  onSuccess,
+}: {
+  user: User;
+  tenants: Tenant[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<RoleAssignData>({
+    resolver: zodResolver(roleAssignSchema),
+    defaultValues: { role: "TECHNICIAN" },
+  });
+
+  const onSubmit = async (data: RoleAssignData) => {
+    setServerError(null);
+    const res = await fetch(`/api/users/${user.id}/roles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      reset();
+      onSuccess();
+    } else {
+      const json = await res.json().catch(() => ({}));
+      setServerError(json.error ?? "Fehler");
+    }
+  };
+
+  const removeRole = async (tenantId: string) => {
+    setRemoving(tenantId);
+    await fetch(`/api/users/${user.id}/roles?tenantId=${tenantId}`, { method: "DELETE" });
+    setRemoving(null);
+    onSuccess();
+  };
+
+  const availableTenants = tenants.filter((t) => !user.tenantRoles.some((r) => r.tenant.id === t.id));
+
+  return (
+    <ModalWrapper title={`Rollen — ${user.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        {/* Current roles */}
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Aktuelle Rollen</p>
+          {user.tenantRoles.length === 0 ? (
+            <p className="text-sm text-gray-400">Keine Mandanten-Rollen</p>
+          ) : (
+            <ul className="space-y-2">
+              {user.tenantRoles.map((tr) => (
+                <li key={tr.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                  <div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium mr-2 ${roleBadge[tr.role] ?? ""}`}>
+                      {roleLabel[tr.role] ?? tr.role}
+                    </span>
+                    <span className="text-sm text-gray-700">{tr.tenant.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeRole(tr.tenant.id)}
+                    disabled={removing === tr.tenant.id}
+                    className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-40"
+                  >
+                    {removing === tr.tenant.id ? "..." : "Entfernen"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Assign new role */}
+        {availableTenants.length > 0 && (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-700">Neue Rolle zuweisen</p>
+            {serverError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{serverError}</p>}
+            <Field label="Mandant" error={errors.tenantId?.message}>
+              <select {...register("tenantId")} className={inputCls}>
+                <option value="">Mandant wählen…</option>
+                {availableTenants.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Rolle" error={errors.role?.message}>
+              <select {...register("role")} className={inputCls}>
+                <option value="INTERNAL_ADMIN">Interner Admin</option>
+                <option value="TECHNICIAN">Techniker</option>
+                <option value="CUSTOMER_ADMIN">Kunden-Admin</option>
+                <option value="CUSTOMER_USER">Kunden-Benutzer</option>
+                <option value="READ_ONLY">Nur Lesen</option>
+              </select>
+            </Field>
+            <ModalActions onClose={onClose} isSubmitting={isSubmitting} submitLabel="Rolle zuweisen" />
+          </form>
+        )}
+      </div>
+    </ModalWrapper>
+  );
+}
+
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -226,9 +343,11 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
 
-export function UserManagement({ users }: { users: User[] }) {
+export function UserManagement({ users, tenants }: { users: User[]; tenants: Tenant[] }) {
   const router = useRouter();
-  const [modal, setModal] = useState<"create" | { type: "edit"; user: User } | null>(null);
+  const [modal, setModal] = useState<
+    "create" | { type: "edit"; user: User } | { type: "roles"; user: User } | null
+  >(null);
 
   const refresh = () => {
     setModal(null);
@@ -240,6 +359,9 @@ export function UserManagement({ users }: { users: User[] }) {
       {modal === "create" && <CreateModal onClose={() => setModal(null)} onSuccess={refresh} />}
       {modal !== null && modal !== "create" && modal.type === "edit" && (
         <EditModal user={modal.user} onClose={() => setModal(null)} onSuccess={refresh} />
+      )}
+      {modal !== null && modal !== "create" && modal.type === "roles" && (
+        <RoleModal user={modal.user} tenants={tenants} onClose={() => setModal(null)} onSuccess={refresh} />
       )}
 
       <div className="flex items-center justify-between mb-5">
@@ -258,7 +380,52 @@ export function UserManagement({ users }: { users: User[] }) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Mobile: Cards */}
+      <div className="block lg:hidden space-y-3">
+        {users.map((u) => (
+          <div key={u.id} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-medium text-gray-900">{u.name}</p>
+                <p className="text-xs text-gray-400">{u.email}</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => setModal({ type: "roles", user: u })} className="text-green-600 hover:text-green-800 text-xs font-medium">
+                  Rollen
+                </button>
+                <button onClick={() => setModal({ type: "edit", user: u })} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                  Bearbeiten
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {u.isSuperAdmin && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge.SUPER_ADMIN}`}>
+                  Super Admin
+                </span>
+              )}
+              {u.tenantRoles.map((tr) => (
+                <span key={tr.id} className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge[tr.role] ?? ""}`}>
+                  {roleLabel[tr.role] ?? tr.role} @ {tr.tenant.name}
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-2 text-xs text-gray-400">
+              <span>
+                {u.lockedUntil && new Date(u.lockedUntil) > new Date()
+                  ? "🔒 Gesperrt"
+                  : u.isActive
+                  ? "✓ Aktiv"
+                  : "○ Inaktiv"}
+              </span>
+              {u.twoFactorEnabled && <span>2FA aktiv</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden lg:block bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -316,12 +483,20 @@ export function UserManagement({ users }: { users: User[] }) {
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => setModal({ type: "edit", user: u })}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                  >
-                    Bearbeiten
-                  </button>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setModal({ type: "roles", user: u })}
+                      className="text-green-600 hover:text-green-800 text-xs font-medium"
+                    >
+                      Rollen
+                    </button>
+                    <button
+                      onClick={() => setModal({ type: "edit", user: u })}
+                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                    >
+                      Bearbeiten
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
