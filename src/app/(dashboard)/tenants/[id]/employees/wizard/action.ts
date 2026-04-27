@@ -5,7 +5,6 @@ import { resolveTenantContext } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export interface EmployeeWizardData {
   firstName: string;
@@ -47,25 +46,34 @@ export async function createEmployeeFromWizard(
         startDate: data.startDate ? new Date(`${data.startDate}T00:00:00.000Z`) : null,
         notes: data.notes || null,
         locationId: data.locationId || null,
-        workstationId: data.workstationId || null,
       },
     });
 
-    if (data.deviceIds.length > 0) {
-      await prisma.device.updateMany({
-        where: { id: { in: data.deviceIds }, tenantId },
-        data: { assignedToId: employee.id },
+    // Link workstation → employee (relation lives on Workstation side)
+    if (data.workstationId) {
+      await prisma.workstation.updateMany({
+        where: { id: data.workstationId, tenantId, employeeId: null },
+        data: { employeeId: employee.id },
       });
     }
 
+    // Assign devices to employee
+    if (data.deviceIds.length > 0) {
+      await prisma.device.updateMany({
+        where: { id: { in: data.deviceIds }, tenantId },
+        data: { employeeId: employee.id },
+      });
+    }
+
+    // Create EmployeeSoftware join records
     if (data.softwareIds.length > 0) {
-      await prisma.$executeRaw`
-        INSERT INTO "_EmployeeSoftware" ("A", "B")
-        SELECT ${employee.id}, s.id
-        FROM "Software" s
-        WHERE s.id = ANY(${data.softwareIds}::text[]) AND s."tenantId" = ${tenantId}
-        ON CONFLICT DO NOTHING
-      `;
+      await prisma.employeeSoftware.createMany({
+        data: data.softwareIds.map((softwareId) => ({
+          employeeId: employee.id,
+          softwareId,
+        })),
+        skipDuplicates: true,
+      });
     }
 
     await createAuditLog({

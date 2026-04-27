@@ -13,7 +13,7 @@ import { createEmployeeFromWizard, type EmployeeWizardData } from "./action";
 
 interface Location { id: string; name: string }
 interface Workstation { id: string; name: string; location?: { name: string } | null }
-interface Device { id: string; name: string; type: string; serialNumber?: string | null }
+interface Device { id: string; manufacturer?: string | null; model?: string | null; type: string; serialNumber?: string | null }
 interface Software { id: string; name: string; vendor?: string | null }
 
 interface Props {
@@ -545,7 +545,9 @@ export function EmployeeWizard({
                           {selected && <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{dev.name}</p>
+                          <p className="text-sm font-medium truncate">
+                            {[dev.manufacturer, dev.model].filter(Boolean).join(" ") || dev.type}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {dev.type}
                             {dev.serialNumber && ` · ${dev.serialNumber}`}
@@ -687,7 +689,7 @@ export function EmployeeWizard({
                         .map((d) => (
                           <li key={d.id} className="text-sm flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-primary" />
-                            {d.name}
+                            {[d.manufacturer, d.model].filter(Boolean).join(" ") || d.type}
                           </li>
                         ))}
                     </ul>

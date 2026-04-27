@@ -41,9 +41,9 @@ export default async function EmployeeWizardPage({ params }: { params: Promise<{
       },
     }),
     prisma.device.findMany({
-      where: { tenantId: id, assignedToId: null, status: "ACTIVE" },
-      orderBy: [{ type: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, type: true, serialNumber: true },
+      where: { tenantId: id, employeeId: null, status: "ACTIVE" },
+      orderBy: [{ type: "asc" }, { manufacturer: "asc" }],
+      select: { id: true, manufacturer: true, model: true, type: true, serialNumber: true },
     }),
     prisma.software.findMany({
       where: { tenantId: id },

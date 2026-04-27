@@ -61,7 +61,7 @@ export default async function DashboardPage() {
       where: { warrantyUntil: { gte: now, lte: in90Days }, status: "ACTIVE" },
     }),
     prisma.software.count({
-      where: { licenseExpiry: { gte: now, lte: in30Days } },
+      where: { validUntil: { gte: now, lte: in30Days } },
     }),
     prisma.ticket.findMany({
       where: { status: { notIn: ["RESOLVED", "CLOSED"] } },
