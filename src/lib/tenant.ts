@@ -22,9 +22,9 @@ export async function resolveTenantContext(
 
   const { id: userId, isSuperAdmin } = session.user;
 
-  // Super admins have access to all tenants
+  // Super admins have access to all non-deleted tenants
   if (isSuperAdmin) {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
     if (!tenant) return null;
     return { userId, tenantId, role: Role.SUPER_ADMIN, isSuperAdmin: true };
   }
