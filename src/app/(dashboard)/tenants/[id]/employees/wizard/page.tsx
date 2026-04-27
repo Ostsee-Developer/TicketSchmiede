@@ -74,7 +74,6 @@ export default async function EmployeeWizardPage({ params }: { params: Promise<{
 
       <EmployeeWizard
         tenantId={id}
-        tenantName={tenant.name}
         locations={locations}
         workstations={workstations}
         availableDevices={availableDevices}

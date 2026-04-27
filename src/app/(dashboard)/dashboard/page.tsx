@@ -200,7 +200,7 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-mono text-muted-foreground shrink-0">
-                          #{ticket.ticketNumber}
+                          #{ticket.number}
                         </span>
                         <Badge variant={p.variant} size="sm">{p.label}</Badge>
                         <Badge variant={s.variant} size="sm">{s.label}</Badge>

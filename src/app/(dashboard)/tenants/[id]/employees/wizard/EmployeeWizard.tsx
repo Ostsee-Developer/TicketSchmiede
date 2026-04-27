@@ -18,7 +18,7 @@ interface Software { id: string; name: string; vendor?: string | null }
 
 interface Props {
   tenantId: string;
-  tenantName: string;
+
   locations: Location[];
   workstations: Workstation[];
   availableDevices: Device[];
@@ -223,7 +223,6 @@ const selectCls =
 
 export function EmployeeWizard({
   tenantId,
-  tenantName,
   locations,
   workstations,
   availableDevices,
