@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { can } from "@/lib/permissions";
+import { serializeSoftware } from "@/lib/dto";
 import { ok, unauthorized, forbidden, notFound, serverError, handleZodError, noContent } from "@/lib/api";
+import { auth } from "@/lib/auth";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -40,7 +42,8 @@ export async function GET(
     if (!ctx) return unauthorized();
     if (!can.viewSoftware(ctx.role)) return forbidden();
 
-    return ok(software);
+    // Strip licenseKey for roles below INTERNAL_ADMIN (e.g. TECHNICIAN, READ_ONLY)
+    return ok(serializeSoftware(software, ctx.role));
   } catch (error) {
     return serverError(error);
   }
@@ -51,6 +54,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return unauthorized();
+
     const { id } = await params;
     const software = await prisma.software.findUnique({ where: { id } });
     if (!software) return notFound();
@@ -76,6 +82,7 @@ export async function PATCH(
 
     await createAuditLog({
       userId: ctx.userId,
+      userEmail: session.user.email,
       tenantId: ctx.tenantId,
       action: "UPDATE",
       resource: "Software",
@@ -85,7 +92,7 @@ export async function PATCH(
       userAgent,
     });
 
-    return ok(updated);
+    return ok(serializeSoftware(updated, ctx.role));
   } catch (error) {
     return serverError(error);
   }
@@ -96,6 +103,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return unauthorized();
+
     const { id } = await params;
     const software = await prisma.software.findUnique({ where: { id } });
     if (!software) return notFound();
@@ -110,6 +120,7 @@ export async function DELETE(
 
     await createAuditLog({
       userId: ctx.userId,
+      userEmail: session.user.email,
       tenantId: ctx.tenantId,
       action: "DELETE",
       resource: "Software",

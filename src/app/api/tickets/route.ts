@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
-import { isCustomerRole } from "@/lib/permissions";
+import { can } from "@/lib/permissions";
 import { ok, created, unauthorized, forbidden, serverError, handleZodError, getPagination } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
@@ -36,12 +36,12 @@ export async function GET(request: NextRequest) {
     const priority = url.searchParams.get("priority");
     const search = url.searchParams.get("search") ?? "";
 
-    const isCustomer = isCustomerRole(ctx.role);
+    // CUSTOMER_ADMIN sees all tenant tickets; CUSTOMER_USER only their own
+    const canViewAll = can.viewAllTenantTickets(ctx.role);
 
     const where = {
       tenantId,
-      // Customers can only see their own tickets (by the user who created them)
-      ...(isCustomer ? { createdById: ctx.userId } : {}),
+      ...(canViewAll ? {} : { createdById: ctx.userId }),
       ...(status ? { status: status as "NEW" | "IN_PROGRESS" | "WAITING_FOR_CUSTOMER" | "RESOLVED" | "CLOSED" } : {}),
       ...(priority ? { priority: priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" } : {}),
       ...(search ? {
@@ -51,6 +51,10 @@ export async function GET(request: NextRequest) {
         ],
       } : {}),
     };
+
+    // Customers never see the technician assignment
+    const isCustomer = !canViewAll || ctx.role === "CUSTOMER_ADMIN";
+    const showTechnicianField = can.viewInternalNotes(ctx.role);
 
     const [data, total] = await Promise.all([
       prisma.ticket.findMany({
@@ -68,13 +72,15 @@ export async function GET(request: NextRequest) {
           createdAt: true,
           updatedAt: true,
           employee: { select: { id: true, firstName: true, lastName: true } },
-          technician: isCustomer ? undefined : { select: { id: true, name: true } },
+          technician: showTechnicianField ? { select: { id: true, name: true } } : undefined,
           createdBy: { select: { id: true, name: true } },
           _count: { select: { comments: true } },
         },
       }),
       prisma.ticket.count({ where }),
     ]);
+
+    void isCustomer; // used above for field selection logic
 
     return ok({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (error) {
@@ -117,6 +123,7 @@ export async function POST(request: NextRequest) {
 
     await createAuditLog({
       userId: ctx.userId,
+      userEmail: session.user.email,
       tenantId: ctx.tenantId,
       action: "CREATE",
       resource: "Ticket",
@@ -126,7 +133,6 @@ export async function POST(request: NextRequest) {
       userAgent,
     });
 
-    // Fire-and-forget notification
     const tenant = await prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { name: true } });
     dispatchNotification({
       event: "ticket.created",

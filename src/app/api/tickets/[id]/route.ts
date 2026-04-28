@@ -3,8 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
-import { can, isCustomerRole } from "@/lib/permissions";
+import { can } from "@/lib/permissions";
+import { serializeTicket } from "@/lib/dto";
 import { ok, unauthorized, forbidden, notFound, serverError, handleZodError } from "@/lib/api";
+import { auth } from "@/lib/auth";
 
 const updateSchema = z.object({
   title: z.string().min(3).max(200).optional(),
@@ -32,10 +34,14 @@ export async function GET(
     const ctx = await resolveTenantContext(ticket.tenantId);
     if (!ctx) return unauthorized();
 
-    // Customers can only view their own tickets
-    if (isCustomerRole(ctx.role) && ticket.createdById !== ctx.userId) {
+    const canViewAll = can.viewAllTenantTickets(ctx.role);
+
+    // CUSTOMER_USER may only view their own tickets
+    if (!canViewAll && ticket.createdById !== ctx.userId) {
       return forbidden();
     }
+
+    const showInternalComments = can.viewInternalNotes(ctx.role);
 
     const full = await prisma.ticket.findUnique({
       where: { id },
@@ -43,14 +49,12 @@ export async function GET(
         employee: { select: { id: true, firstName: true, lastName: true } },
         workstation: { select: { id: true, name: true } },
         device: { select: { id: true, type: true, manufacturer: true, model: true } },
-        technician: { select: { id: true, name: true, email: true } },
+        technician: showInternalComments ? { select: { id: true, name: true, email: true } } : undefined,
         createdBy: { select: { id: true, name: true, email: true } },
         comments: {
-          where: isCustomerRole(ctx.role) ? { isInternal: false } : {},
+          where: showInternalComments ? {} : { isInternal: false },
           orderBy: { createdAt: "asc" },
-          include: {
-            user: { select: { id: true, name: true } },
-          },
+          include: { user: { select: { id: true, name: true } } },
         },
         files: {
           select: { id: true, name: true, mimeType: true, size: true, createdAt: true },
@@ -58,13 +62,9 @@ export async function GET(
       },
     });
 
-    // Strip internalNotes for customers
-    if (isCustomerRole(ctx.role) && full) {
-      const { internalNotes: _in, ...safeTicket } = full;
-      return ok(safeTicket);
-    }
+    if (!full) return notFound();
 
-    return ok(full);
+    return ok(serializeTicket(full, ctx.role));
   } catch (error) {
     return serverError(error);
   }
@@ -75,6 +75,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return unauthorized();
+
     const { id } = await params;
     const ticket = await prisma.ticket.findUnique({ where: { id } });
     if (!ticket) return notFound();
@@ -102,6 +105,7 @@ export async function PATCH(
 
     await createAuditLog({
       userId: ctx.userId,
+      userEmail: session.user.email,
       tenantId: ctx.tenantId,
       action: "UPDATE",
       resource: "Ticket",
