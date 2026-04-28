@@ -22,14 +22,8 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Customer portal: only allow portal routes for customer roles
-  const isCustomerPath = pathname.startsWith("/portal");
-  const isInternalPath = !isCustomerPath;
-
-  // If internal admin tries to access portal, redirect to dashboard
-  if (isInternalPath && pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
+  // Root path: let page.tsx handle role-based redirect
+  if (pathname === "/") return NextResponse.next();
 
   return NextResponse.next();
 });
