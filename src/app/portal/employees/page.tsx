@@ -114,8 +114,6 @@ export default async function PortalEmployeesPage() {
                   <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${
                     e.status === "ACTIVE"
                       ? "bg-green-100 text-green-700"
-                      : e.status === "ON_LEAVE"
-                      ? "bg-amber-100 text-amber-700"
                       : "bg-gray-100 text-gray-500"
                   }`}>
                     {STATUS_LABELS[e.status] ?? e.status}
