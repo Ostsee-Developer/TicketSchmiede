@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Audit-Log" };
@@ -113,7 +113,7 @@ export default async function AuditLogPage({
   const limit = 50;
   const skip = (page - 1) * limit;
 
-  const where: Parameters<typeof prisma.auditLog.findMany>[0]["where"] = {
+  const where: Prisma.AuditLogWhereInput = {
     ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
     ...(sp.action ? { action: sp.action as "LOGIN" } : {}),
     ...(sp.userId ? { userId: sp.userId } : {}),
