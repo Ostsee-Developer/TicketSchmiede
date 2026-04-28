@@ -5,9 +5,9 @@ import { getPortalContext } from "@/lib/portal-context";
 export const metadata = { title: "Mitarbeiter – TicketSchmiede" };
 
 const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Aktiv",
-  INACTIVE: "Inaktiv",
-  ON_LEAVE: "Abwesend",
+  ACTIVE:   "Aktiv",
+  DISABLED: "Inaktiv",
+  LEFT:     "Ausgeschieden",
 };
 
 export default async function PortalEmployeesPage() {
@@ -86,8 +86,6 @@ export default async function PortalEmployeesPage() {
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                         e.status === "ACTIVE"
                           ? "bg-green-100 text-green-700"
-                          : e.status === "ON_LEAVE"
-                          ? "bg-amber-100 text-amber-700"
                           : "bg-gray-100 text-gray-500"
                       }`}>
                         {STATUS_LABELS[e.status] ?? e.status}
