@@ -67,7 +67,7 @@ function LoginFormContent() {
           setLoading(false);
           return;
         }
-      } catch (err) {
+      } catch (_err) {
         setError("Verbindungsfehler. Bitte versuche es später erneut.");
         setLoading(false);
         return;
