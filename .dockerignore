@@ -21,4 +21,3 @@ docker-compose*.yml
 Dockerfile*
 .dockerignore
 setup.sh
-*.sh

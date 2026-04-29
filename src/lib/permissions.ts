@@ -1,6 +1,6 @@
 import { Role } from "@prisma/client";
 
-// Role hierarchy (higher = more permissions)
+// Role hierarchy (higher number = more permissions)
 const ROLE_HIERARCHY: Record<Role, number> = {
   SUPER_ADMIN: 100,
   INTERNAL_ADMIN: 80,
@@ -22,54 +22,62 @@ export function isCustomerRole(role: Role): boolean {
   return ROLE_HIERARCHY[role] < ROLE_HIERARCHY[Role.READ_ONLY];
 }
 
-// Permission checks by feature
+// ─── Permission Matrix ────────────────────────────────────────────────────────
+
 export const can = {
-  // Tenant management
+  // ── Tenant management ──────────────────────────────────────────────────────
   manageTenants: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   viewAllTenants: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
-  // Employee management
+  // ── Employees ──────────────────────────────────────────────────────────────
   manageEmployees: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
-  viewEmployees: (role: Role) => isInternalRole(role),
-  viewEmployeeNames: (_role: Role) => true, // customers can see names for tickets
+  // Internal staff + CUSTOMER_ADMIN may see the employee list
+  viewEmployees: (role: Role) =>
+    isInternalRole(role) || role === Role.CUSTOMER_ADMIN,
+  viewEmployeeNames: (_role: Role) => true, // needed for ticket creation by customers
 
-  // Device & Workstation
+  // ── Devices & Workstations ─────────────────────────────────────────────────
   manageDevices: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
   viewDevices: (role: Role) => isInternalRole(role),
 
-  // Software
+  // ── Software / Lizenzen ────────────────────────────────────────────────────
   manageSoftware: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
   viewSoftware: (role: Role) => isInternalRole(role),
+  // License keys are sensitive — only INTERNAL_ADMIN and above may see them
+  viewLicenseKeys: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
 
-  // Credentials
+  // ── Credentials / Zugangsdaten ─────────────────────────────────────────────
+  // TECHNICIAN may see the credential list (name, username, URL) but NOT passwords
   viewCredentials: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
-  revealCredentials: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
+  // Only INTERNAL_ADMIN+ may call /reveal and get the decrypted password
+  revealCredentials: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   manageCredentials: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
-  // Tickets - internal
+  // ── Tickets – internal staff ───────────────────────────────────────────────
   manageTickets: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
   assignTickets: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
   viewInternalNotes: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
-  // Tickets - customer
+  // ── Tickets – customer roles ───────────────────────────────────────────────
+  // CUSTOMER_ADMIN sees every ticket of their tenant; CUSTOMER_USER sees only own
+  viewAllTenantTickets: (role: Role) =>
+    isInternalRole(role) || role === Role.CUSTOMER_ADMIN,
   createTickets: (_role: Role) => true,
   viewOwnTickets: (_role: Role) => true,
 
-  // Users & Permissions
+  // ── Users & Permissions ────────────────────────────────────────────────────
   manageUsers: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   managePermissions: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
 
-  // Export
+  // ── Export / Import ────────────────────────────────────────────────────────
   exportWithPasswords: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   exportWithoutPasswords: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
-
-  // Import
   importData: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
 
-  // Audit log
+  // ── Audit log ──────────────────────────────────────────────────────────────
   viewAuditLog: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
 
-  // Dashboard
+  // ── Dashboard ──────────────────────────────────────────────────────────────
   viewAdminDashboard: (role: Role) => isInternalRole(role),
 };
 

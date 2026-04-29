@@ -5,31 +5,40 @@ import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { can } from "@/lib/permissions";
 import { decrypt } from "@/lib/encryption";
 import { ok, unauthorized, forbidden, notFound, serverError } from "@/lib/api";
+import { auth } from "@/lib/auth";
 
 /**
  * POST /api/credentials/[id]/reveal
- * Returns the decrypted password for a credential.
- * Requires TECHNICIAN role or higher.
- * Every reveal is logged in the audit log.
+ *
+ * Returns decrypted password + notes for a credential.
+ * Requires INTERNAL_ADMIN or higher — TECHNICIAN is explicitly excluded.
+ * Every call is permanently logged in the audit log.
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return unauthorized();
+
     const { id } = await params;
     const credential = await prisma.credential.findUnique({ where: { id } });
     if (!credential) return notFound();
 
     const ctx = await resolveTenantContext(credential.tenantId);
     if (!ctx) return unauthorized();
-    if (!can.revealCredentials(ctx.role)) return forbidden("Keine Berechtigung zum Anzeigen von Passwörtern");
+
+    // INTERNAL_ADMIN+ only — Technicians must not see decrypted passwords
+    if (!can.revealCredentials(ctx.role)) {
+      return forbidden("Keine Berechtigung zum Anzeigen von Passwörtern");
+    }
 
     const { ipAddress, userAgent } = getClientInfo(request);
 
-    // Log EVERY password reveal
     await createAuditLog({
       userId: ctx.userId,
+      userEmail: session.user.email,
       tenantId: ctx.tenantId,
       action: "CREDENTIAL_VIEW",
       resource: "Credential",
@@ -50,7 +59,15 @@ export async function POST(
       ? decrypt(credential.encryptedNotes)
       : null;
 
-    return ok({ password, notes });
+    const rustdeskPassword = credential.encryptedRustdeskPassword
+      ? decrypt(credential.encryptedRustdeskPassword)
+      : null;
+
+    const teamviewerPassword = credential.encryptedTeamviewerPassword
+      ? decrypt(credential.encryptedTeamviewerPassword)
+      : null;
+
+    return ok({ password, notes, rustdeskPassword, teamviewerPassword });
   } catch (error) {
     return serverError(error);
   }

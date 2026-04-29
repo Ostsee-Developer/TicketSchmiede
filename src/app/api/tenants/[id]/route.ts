@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -112,11 +112,39 @@ export async function DELETE(
     if (!session?.user) return unauthorized();
     if (!session.user.isSuperAdmin) return forbidden();
 
+    const url = new URL(request.url);
+    const force = url.searchParams.get("force") === "true";
+
     const { ipAddress, userAgent } = getClientInfo(request);
-    const existing = await prisma.tenant.findUnique({ where: { id } });
+
+    const existing = await prisma.tenant.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { employees: true, tickets: true, devices: true },
+        },
+      },
+    });
     if (!existing) return notFound();
 
-    await prisma.tenant.delete({ where: { id } });
+    // Safety check: prevent accidental deletion of tenants with data
+    const hasData = existing._count.employees > 0 || existing._count.tickets > 0 || existing._count.devices > 0;
+    if (hasData && !force) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Mandant enthält Daten. Zum erzwungenen Löschen ?force=true verwenden.",
+          counts: existing._count,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Soft delete: set deletedAt and deactivate
+    await prisma.tenant.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
 
     await createAuditLog({
       userId: session.user.id,
@@ -124,7 +152,7 @@ export async function DELETE(
       action: "DELETE",
       resource: "Tenant",
       resourceId: id,
-      details: { name: existing.name },
+      details: { name: existing.name, forced: force, counts: existing._count },
       ipAddress,
       userAgent,
     });

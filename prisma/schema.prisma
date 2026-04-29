@@ -57,6 +57,21 @@ enum DeviceStatus {
   LOST
 }
 
+enum OsType {
+  WINDOWS_10
+  WINDOWS_11
+  WINDOWS_SERVER_2019
+  WINDOWS_SERVER_2022
+  WINDOWS_SERVER_2025
+  MACOS
+  LINUX
+  UBUNTU
+  DEBIAN
+  CENTOS
+  RHEL
+  OTHER
+}
+
 enum LicenseType {
   PERPETUAL
   SUBSCRIPTION
@@ -129,22 +144,23 @@ enum AuditAction {
 // ============================================================
 
 model Tenant {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  slug        String   @unique
+  slug        String    @unique
   email       String?
   phone       String?
   website     String?
   street      String?
   city        String?
   zipCode     String?
-  country     String   @default("DE")
+  country     String    @default("DE")
   logoUrl     String?
   notes       String?
-  isActive    Boolean  @default(true)
-  externalRef String?  // für Excel-Import Referenzen
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive    Boolean   @default(true)
+  externalRef String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   locations    Location[]
   employees    Employee[]
@@ -323,7 +339,7 @@ model Device {
   inventoryNumber String?
   purchaseDate    DateTime?
   warrantyUntil   DateTime?
-  os              String?
+  os              OsType?
   osVersion       String?
   ipAddress       String?
   macAddress      String?
@@ -338,6 +354,7 @@ model Device {
   employee    Employee?     @relation("EmployeeDevice", fields: [employeeId], references: [id], onDelete: SetNull)
   workstation Workstation?  @relation("WorkstationDevice", fields: [workstationId], references: [id], onDelete: SetNull)
   software    DeviceSoftware[]
+  credentials Credential[]
   files       File[]
   tickets     Ticket[]
 
@@ -416,28 +433,36 @@ model DeviceSoftware {
 // ============================================================
 
 model Credential {
-  id                String    @id @default(cuid())
-  tenantId          String
-  employeeId        String?
-  templateId        String?
-  externalRef       String?
-  name              String
-  username          String?
-  encryptedPassword String?   // AES-256-GCM encrypted
-  encryptedNotes    String?   // optional encrypted notes
-  url               String?
-  category          String?   // z.B. "Microsoft 365", "VPN", "Windows"
-  expiresAt         DateTime?
-  lastRotatedAt     DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                          String    @id @default(cuid())
+  tenantId                    String
+  employeeId                  String?
+  deviceId                    String?
+  templateId                  String?
+  externalRef                 String?
+  name                        String
+  username                    String?
+  encryptedPassword           String?   // AES-256-GCM encrypted
+  encryptedNotes              String?   // AES-256-GCM encrypted
+  url                         String?
+  category                    String?
+  // Remote access (all encrypted)
+  rustdeskId                  String?
+  encryptedRustdeskPassword   String?   // AES-256-GCM encrypted
+  teamviewerId                String?
+  encryptedTeamviewerPassword String?   // AES-256-GCM encrypted
+  expiresAt                   DateTime?
+  lastRotatedAt               DateTime?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
   tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employee Employee?           @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  device   Device?             @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   template CredentialTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([employeeId])
+  @@index([deviceId])
   @@index([templateId])
   @@index([expiresAt])
   @@index([externalRef])

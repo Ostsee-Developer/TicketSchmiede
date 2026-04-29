@@ -1,52 +1,85 @@
-import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { getPortalContext } from "@/lib/portal-context";
+import { PortalMobileNav } from "@/components/portal/portal-mobile-nav";
+import { PortalUserMenu } from "@/components/portal/portal-user-menu";
 
 export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const ctx = await getPortalContext();
+  if (!ctx) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* ── Topbar ── */}
+      <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          {/* Logo */}
+          <Link href="/portal/tickets" className="flex items-center gap-2.5 shrink-0">
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
             </div>
-            <span className="font-bold text-gray-800">Ticket Schmiede</span>
-            <span className="text-gray-300">|</span>
-            <span className="text-sm text-gray-500">Kundenportal</span>
-          </div>
-          <nav className="flex items-center gap-4">
+            <span className="font-bold text-gray-900 hidden sm:block">TicketSchmiede</span>
+          </Link>
+
+          {/* Desktop nav */}
+          <nav className="hidden sm:flex items-center gap-1">
             <Link
               href="/portal/tickets"
-              className="text-sm text-gray-600 hover:text-blue-700 font-medium"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
             >
-              Meine Tickets
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Tickets
             </Link>
+            {ctx.isCustomerAdmin && (
+              <Link
+                href="/portal/employees"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Mitarbeiter
+              </Link>
+            )}
             <Link
               href="/portal/tickets/new"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+              className="ml-2 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
-              + Ticket erstellen
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Neues Ticket
             </Link>
-            <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
-              <button type="submit" className="text-xs text-gray-400 hover:text-gray-600">
-                Abmelden
-              </button>
-            </form>
           </nav>
+
+          {/* User menu (desktop) + sign-out form */}
+          <PortalUserMenu
+            userName={ctx.userName}
+            userEmail={ctx.userEmail}
+            tenantName={ctx.tenantName}
+            isCustomerAdmin={ctx.isCustomerAdmin}
+          />
         </div>
       </header>
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">{children}</main>
+
+      {/* ── Page content ── */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 pb-24 sm:pb-8">
+        {children}
+      </main>
+
+      {/* ── Mobile bottom nav ── */}
+      <PortalMobileNav isCustomerAdmin={ctx.isCustomerAdmin} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/utils";
@@ -9,7 +9,7 @@ interface Ticket {
   id: string;
   number: number;
   title: string;
-  description: string;
+  description: string | null;
   status: string;
   priority: string;
   category: string;
@@ -56,12 +56,15 @@ export default function TicketDetailPage() {
   const [timeSpent, setTimeSpent] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     fetch(`/api/tickets/${ticketId}`)
       .then((r) => r.json())
-      .then((d) => { setTicket(d.data); setLoading(false); })
+      .then((d) => { setTicket(d.data ?? null); setLoading(false); })
       .catch(() => setLoading(false));
   }, [ticketId]);
+
+  useEffect(() => { load(); }, [load]);
 
   const updateStatus = async (status: string) => {
     const res = await fetch(`/api/tickets/${ticketId}`, {
@@ -88,16 +91,27 @@ export default function TicketDetailPage() {
       }),
     });
     if (res.ok) {
-      const d = await res.json();
-      setTicket((t) => t ? { ...t, comments: [...t.comments, d.data] } : t);
       setComment("");
       setTimeSpent("");
+      load();
     }
     setSubmitting(false);
   };
 
-  if (loading) return <div className="p-8 text-gray-400">Laden...</div>;
-  if (!ticket) return <div className="p-8 text-gray-400">Ticket nicht gefunden.</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+    </div>
+  );
+  if (!ticket) return (
+    <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
+      <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      <p className="text-gray-500 font-medium">Ticket nicht gefunden.</p>
+      <Link href={`/tenants/${tenantId}/tickets`} className="text-blue-600 text-sm hover:underline">← Zurück zur Ticketliste</Link>
+    </div>
+  );
 
   const statusColor: Record<string, string> = {
     NEW: "bg-blue-100 text-blue-700",
@@ -108,14 +122,14 @@ export default function TicketDetailPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href={`/tenants/${tenantId}/tickets`} className="hover:text-blue-600">Tickets</Link>
+    <div className="space-y-4 max-w-full">
+      <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
+        <Link href={`/tenants/${tenantId}/tickets`} className="hover:text-blue-600 shrink-0">Tickets</Link>
         <span>/</span>
-        <span>#{ticket.number}</span>
+        <span className="truncate">#{ticket.number} · {ticket.title}</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -125,7 +139,11 @@ export default function TicketDetailPage() {
                 {statusOptions.find((s) => s.value === ticket.status)?.label}
               </span>
             </div>
-            <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
+            {ticket.description ? (
+              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
+            ) : (
+              <p className="text-gray-400 italic text-sm">Keine Beschreibung vorhanden.</p>
+            )}
           </div>
 
           {/* Internal Notes */}
@@ -166,10 +184,10 @@ export default function TicketDetailPage() {
               onChange={(e) => setComment(e.target.value)}
               rows={4}
               placeholder="Deine Nachricht..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm leading-relaxed"
             />
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3">
+              <div className="flex items-center gap-4 flex-1">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
@@ -184,15 +202,15 @@ export default function TicketDetailPage() {
                   value={timeSpent}
                   onChange={(e) => setTimeSpent(e.target.value)}
                   placeholder="Zeit (min)"
-                  className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="w-24 px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
               <button
                 onClick={submitComment}
                 disabled={submitting || !comment.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
               >
-                {submitting ? "Senden..." : "Senden"}
+                {submitting ? "Senden…" : "Senden"}
               </button>
             </div>
           </div>

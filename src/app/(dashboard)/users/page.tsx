@@ -10,24 +10,31 @@ export default async function UsersPage() {
   if (!session?.user) redirect("/login");
   if (!session.user.isSuperAdmin) redirect("/dashboard");
 
-  const users = await prisma.user.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      isSuperAdmin: true,
-      isActive: true,
-      twoFactorEnabled: true,
-      lastLoginAt: true,
-      failedLoginCount: true,
-      lockedUntil: true,
-      createdAt: true,
-      tenantRoles: {
-        include: { tenant: { select: { name: true } } },
+  const [users, tenants] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isSuperAdmin: true,
+        isActive: true,
+        twoFactorEnabled: true,
+        lastLoginAt: true,
+        failedLoginCount: true,
+        lockedUntil: true,
+        createdAt: true,
+        tenantRoles: {
+          include: { tenant: { select: { id: true, name: true } } },
+        },
       },
-    },
-  });
+    }),
+    prisma.tenant.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
+  ]);
 
-  return <UserManagement users={users} />;
+  return <UserManagement users={users} tenants={tenants} />;
 }
