@@ -40,19 +40,7 @@ export default async function PortalLayout({
               </svg>
               Tickets
             </Link>
-            {ctx.isCustomerAdmin && (
-              <Link
-                href="/portal/employees"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Mitarbeiter
-              </Link>
-            )}
-            <Link
+                        <Link
               href="/portal/tickets/new"
               className="ml-2 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
@@ -68,7 +56,6 @@ export default async function PortalLayout({
             userName={ctx.userName}
             userEmail={ctx.userEmail}
             tenantName={ctx.tenantName}
-            isCustomerAdmin={ctx.isCustomerAdmin}
           />
         </div>
       </header>
@@ -79,7 +66,7 @@ export default async function PortalLayout({
       </main>
 
       {/* ── Mobile bottom nav ── */}
-      <PortalMobileNav isCustomerAdmin={ctx.isCustomerAdmin} />
+      <PortalMobileNav />
     </div>
   );
 }
