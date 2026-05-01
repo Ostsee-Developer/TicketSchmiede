@@ -9,6 +9,7 @@ export interface PortalContext {
   role: Role;
   userName: string;
   userEmail: string;
+  isCustomerAdmin: boolean;
 }
 
 /**
@@ -41,5 +42,6 @@ export async function getPortalContext(): Promise<PortalContext | null> {
     role: userRole.role,
     userName: userName ?? userEmail,
     userEmail,
+    isCustomerAdmin: false,
   };
 }

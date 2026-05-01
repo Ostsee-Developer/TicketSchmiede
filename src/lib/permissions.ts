@@ -15,30 +15,34 @@ const ROLE_HIERARCHY: Record<Role, number> = {
   CUSTOMER_USER: 10,
 };
 
+const INTERNAL_ROLES: Role[] = [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.READ_ONLY];
+const CUSTOMER_ROLES: Role[] = [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER];
+const STAFF_OR_CUSTOMER_ADMIN: Role[] = [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.CUSTOMER_ADMIN];
+
 export function hasMinRole(userRole: Role, minRole: Role): boolean {
   return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[minRole];
 }
 
 export function isInternalRole(role: Role): boolean {
-  return [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.READ_ONLY].includes(role);
+  return INTERNAL_ROLES.includes(role);
 }
 
 export function isCustomerRole(role: Role): boolean {
-  return [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER].includes(role);
+  return CUSTOMER_ROLES.includes(role);
 }
 
 export const can = {
   manageTenants: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   viewAllTenants: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
-  manageEmployees: (role: Role) => [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.CUSTOMER_ADMIN].includes(role),
+  manageEmployees: (role: Role) => STAFF_OR_CUSTOMER_ADMIN.includes(role),
   viewEmployees: (role: Role) => isInternalRole(role) || role === Role.CUSTOMER_ADMIN,
   viewEmployeeNames: (_role: Role) => true,
 
-  manageDevices: (role: Role) => [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.CUSTOMER_ADMIN].includes(role),
+  manageDevices: (role: Role) => STAFF_OR_CUSTOMER_ADMIN.includes(role),
   viewDevices: (role: Role) => isInternalRole(role) || role === Role.CUSTOMER_ADMIN,
 
-  manageSoftware: (role: Role) => [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.CUSTOMER_ADMIN].includes(role),
+  manageSoftware: (role: Role) => STAFF_OR_CUSTOMER_ADMIN.includes(role),
   viewSoftware: (role: Role) => isInternalRole(role) || role === Role.CUSTOMER_ADMIN,
   viewLicenseKeys: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
 
@@ -46,7 +50,7 @@ export const can = {
   revealCredentials: (role: Role) => hasMinRole(role, Role.INTERNAL_ADMIN),
   manageCredentials: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
-  manageTickets: (role: Role) => [Role.SUPER_ADMIN, Role.INTERNAL_ADMIN, Role.TECHNICIAN, Role.CUSTOMER_ADMIN].includes(role),
+  manageTickets: (role: Role) => STAFF_OR_CUSTOMER_ADMIN.includes(role),
   assignTickets: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
   viewInternalNotes: (role: Role) => hasMinRole(role, Role.TECHNICIAN),
 
