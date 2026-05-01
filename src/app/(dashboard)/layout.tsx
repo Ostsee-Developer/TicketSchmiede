@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { getLatestUserRole, isEmployeePortalRole } from "@/lib/access-role";
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +12,13 @@ export default async function DashboardLayout({
 
   if (!session?.user) {
     redirect("/login");
+  }
+
+  if (!session.user.isSuperAdmin) {
+    const role = await getLatestUserRole(session.user.id);
+    if (isEmployeePortalRole(role)) {
+      redirect("/portal/tickets");
+    }
   }
 
   return (
