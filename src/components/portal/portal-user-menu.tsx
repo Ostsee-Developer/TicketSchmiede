@@ -7,10 +7,9 @@ interface Props {
   userName: string;
   userEmail: string;
   tenantName: string;
-  isCustomerAdmin: boolean;
 }
 
-export function PortalUserMenu({ userName, userEmail, tenantName, isCustomerAdmin }: Props) {
+export function PortalUserMenu({ userName, userEmail, tenantName }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,9 +41,6 @@ export function PortalUserMenu({ userName, userEmail, tenantName, isCustomerAdmi
         <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-[140px] truncate">
           {userName}
         </span>
-        <svg className="w-4 h-4 text-gray-400 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
       </button>
 
       {open && (
@@ -54,10 +50,8 @@ export function PortalUserMenu({ userName, userEmail, tenantName, isCustomerAdmi
             <p className="text-xs text-gray-500 truncate">{userEmail}</p>
             <div className="mt-1.5 flex items-center gap-1.5">
               <span className="text-xs text-gray-400 truncate">{tenantName}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                isCustomerAdmin ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
-              }`}>
-                {isCustomerAdmin ? "Admin" : "Benutzer"}
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
+                Mitarbeiter
               </span>
             </div>
           </div>

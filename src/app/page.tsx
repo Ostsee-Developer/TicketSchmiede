@@ -9,7 +9,6 @@ export default async function RootPage() {
 
   if (session.user.isSuperAdmin) redirect("/dashboard");
 
-  // Determine where to send the user based on their role
   const userRole = await prisma.userTenantRole.findFirst({
     where: { userId: session.user.id },
     select: { role: true },
@@ -18,8 +17,10 @@ export default async function RootPage() {
 
   if (!userRole) redirect("/login");
 
-  const customerRoles: Role[] = [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER];
-  if (customerRoles.includes(userRole.role)) {
+  // Neues Zielbild:
+  // - Mitarbeiter (CUSTOMER_USER) => eigenes Ticket-Portal
+  // - alle übrigen Rollen => Dashboard
+  if (userRole.role === Role.CUSTOMER_USER) {
     redirect("/portal/tickets");
   }
 
