@@ -14,7 +14,7 @@ import {
 } from "./webauthn";
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional().or(z.literal("")),
   password: z.string().optional(),
   totp: z.string().optional(),
   mode: z.enum(["password", "passkey"]).default("password"),
@@ -47,7 +47,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const { email, mode } = parsed.data;
+        const { mode } = parsed.data;
+        const email = parsed.data.email?.trim() || null;
         let ipAddress: string | null = null;
         let userAgent: string | null = null;
         try {
@@ -61,9 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const lockoutMinutes = Number(process.env.LOCKOUT_DURATION ?? 15);
         const loginPolicy = await getLoginPolicy();
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: {
+        const userSelect = {
             id: true,
             email: true,
             name: true,
@@ -82,11 +81,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 counter: true,
               },
             },
-          },
-        });
+          } as const;
+        let user = email
+          ? await prisma.user.findUnique({
+              where: { email },
+              select: userSelect,
+            })
+          : null;
         console.log(`[auth] Login attempt: ${email} → found=${!!user} active=${user?.isActive ?? "n/a"}`);
 
-        if (!user || !user.isActive) {
+        if (mode === "password" && (!user || !user.isActive)) {
           await createAuditLog({
             action: "LOGIN_FAILED",
             userEmail: email,
@@ -98,7 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         // Check lockout
-        if (user.lockedUntil && user.lockedUntil > new Date()) {
+        if (mode === "password" && user?.lockedUntil && user.lockedUntil > new Date()) {
           await createAuditLog({
             userId: user.id,
             userEmail: user.email,
@@ -113,8 +117,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (mode === "passkey") {
           if (!passkeyLoginAllowed(loginPolicy)) {
             await createAuditLog({
-              userId: user.id,
-              userEmail: user.email,
               action: "LOGIN_FAILED",
               details: { reason: "passkey_login_disabled" },
               ipAddress,
@@ -125,8 +127,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           if (!parsed.data.assertion) {
             await createAuditLog({
-              userId: user.id,
-              userEmail: user.email,
               action: "LOGIN_FAILED",
               details: { reason: "missing_passkey_assertion" },
               ipAddress,
@@ -136,11 +136,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           const assertion = JSON.parse(parsed.data.assertion) as AuthenticationCredentialJson;
-          const credential = user.passkeys.find((passkey) => passkey.credentialId === assertion.rawId);
+          const credential = await prisma.passkeyCredential.findUnique({
+            where: { credentialId: assertion.rawId },
+            include: {
+              user: { select: userSelect },
+            },
+          });
           if (!credential) {
             await createAuditLog({
-              userId: user.id,
-              userEmail: user.email,
               action: "LOGIN_FAILED",
               details: { reason: "unknown_passkey" },
               ipAddress,
@@ -149,9 +152,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return null;
           }
 
+          user = credential.user;
+          if (!user.isActive) {
+            await createAuditLog({
+              userId: user.id,
+              userEmail: user.email,
+              action: "LOGIN_FAILED",
+              details: { reason: "account_disabled" },
+              ipAddress,
+              userAgent,
+            });
+            return null;
+          }
+
+          if (user.lockedUntil && user.lockedUntil > new Date()) {
+            await createAuditLog({
+              userId: user.id,
+              userEmail: user.email,
+              action: "LOGIN_FAILED",
+              details: { reason: "account_locked", lockedUntil: user.lockedUntil },
+              ipAddress,
+              userAgent,
+            });
+            return null;
+          }
+
           const challenge = await prisma.webAuthnChallenge.findFirst({
             where: {
-              userId: user.id,
+              OR: [{ userId: user.id }, { userId: null }],
               type: "authentication",
               expiresAt: { gt: new Date() },
             },
@@ -186,7 +214,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               data: { counter: verified.counter, lastUsedAt: new Date() },
             }),
             prisma.webAuthnChallenge.deleteMany({
-              where: { userId: user.id, type: "authentication" },
+              where: { OR: [{ userId: user.id }, { userId: null }], type: "authentication" },
             }),
             prisma.user.update({
               where: { id: user.id },
@@ -215,6 +243,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             isSuperAdmin: user.isSuperAdmin,
           };
         }
+
+        if (!user) return null;
 
         if (!passwordLoginAllowed(loginPolicy)) {
           await createAuditLog({

@@ -29,21 +29,13 @@ interface Passkey {
   lastUsedAt: string | null;
 }
 
-type LoginPolicy = "PASSWORD_AND_PASSKEY" | "PASSWORD_ONLY" | "PASSKEY_ONLY";
 type Step = "overview" | "setup" | "backup" | "done" | "disable";
-
-const policyLabels: Record<LoginPolicy, string> = {
-  PASSWORD_AND_PASSKEY: "Passwort und Passkey",
-  PASSWORD_ONLY: "Nur Passwort",
-  PASSKEY_ONLY: "Nur Passkey",
-};
 
 export default function SecuritySettingsPage() {
   const [step, setStep] = useState<Step>("overview");
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
-  const [loginPolicy, setLoginPolicy] = useState<LoginPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +44,7 @@ export default function SecuritySettingsPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    Promise.all([load2Fa(), loadPasskeys(), loadLoginPolicy()]).finally(() => setLoading(false));
+    Promise.all([load2Fa(), loadPasskeys()]).finally(() => setLoading(false));
   }, []);
 
   const load2Fa = async () => {
@@ -66,13 +58,6 @@ export default function SecuritySettingsPage() {
   const loadPasskeys = async () => {
     const payload = await fetch("/api/auth/passkey/list").then((response) => response.json());
     if (payload.success) setPasskeys(payload.data);
-  };
-
-  const loadLoginPolicy = async () => {
-    const response = await fetch("/api/settings/login-policy");
-    if (response.status === 403 || response.status === 401) return;
-    const payload = await response.json();
-    if (payload.success) setLoginPolicy(payload.data.policy);
   };
 
   const startSetup = async () => {
@@ -171,17 +156,6 @@ export default function SecuritySettingsPage() {
     setPasskeys((items) => items.filter((item) => item.id !== id));
   };
 
-  const updatePolicy = async (policy: LoginPolicy) => {
-    setSubmitting(true);
-    const payload = await fetch("/api/settings/login-policy", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ policy }),
-    }).then((response) => response.json());
-    if (payload.success) setLoginPolicy(payload.data.policy);
-    setSubmitting(false);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -194,7 +168,7 @@ export default function SecuritySettingsPage() {
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Sicherheitseinstellungen</h1>
-        <p className="text-gray-500 mt-1">Verwalte 2FA, Passkeys und erlaubte Login-Methoden.</p>
+        <p className="text-gray-500 mt-1">Verwalte deine 2FA und persönlichen Passkeys.</p>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -265,29 +239,6 @@ export default function SecuritySettingsPage() {
               )}
             </div>
           </section>
-
-          {loginPolicy && (
-            <section className="bg-white rounded-xl border border-gray-200 p-6 lg:col-span-2">
-              <h2 className="font-semibold text-gray-900">Erlaubte Login-Methoden</h2>
-              <p className="text-sm text-gray-500 mt-1">Diese Einstellung gilt systemweit für alle Benutzer.</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {(Object.keys(policyLabels) as LoginPolicy[]).map((policy) => (
-                  <button
-                    key={policy}
-                    onClick={() => updatePolicy(policy)}
-                    disabled={submitting}
-                    className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-                      loginPolicy === policy
-                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {policyLabels[policy]}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       )}
 

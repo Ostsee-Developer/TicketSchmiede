@@ -23,6 +23,7 @@ import {
   Shield,
   Search,
   Settings,
+  SlidersHorizontal,
 } from "lucide-react";
 
 interface NavItem {
@@ -93,15 +94,24 @@ export function Sidebar({
   ];
 
   const adminItems: NavItem[] = [
-    ...(isSuperAdmin ? [{ label: "Mandanten", href: "/tenants", icon: Building2 }] : []),
-    { label: "Benutzer", href: "/users", icon: UserCog },
-    { label: "Audit-Log", href: "/audit-log", icon: ScrollText },
+    ...(isSuperAdmin
+      ? [
+          { label: "Mandanten", href: "/tenants", icon: Building2 },
+          { label: "Benutzer", href: "/users", icon: UserCog },
+          { label: "Audit-Log", href: "/audit-log", icon: ScrollText },
+          { label: "System", href: "/admin/system", icon: SlidersHorizontal },
+        ]
+      : []),
+  ];
+
+  const accountItems: NavItem[] = [
     { label: "Sicherheit", href: "/settings/security", icon: Settings },
   ];
 
   const sections: NavSection[] = [
     { items: mainItems },
-    { title: "Administration", items: adminItems },
+    ...(adminItems.length > 0 ? [{ title: "Administration", items: adminItems }] : []),
+    { title: "Konto", items: accountItems },
   ];
 
   const isActive = (href: string) =>

@@ -27,6 +27,7 @@ export default async function UsersPage() {
         tenantRoles: {
           include: { tenant: { select: { id: true, name: true } } },
         },
+        passkeys: { select: { id: true, name: true, createdAt: true, lastUsedAt: true } },
       },
     }),
     prisma.tenant.findMany({

@@ -80,7 +80,7 @@ export default async function TenantDevicesPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <Link href={`/tenants/${id}/dashboard`} className="hover:text-blue-600">{tenant.name}</Link>
@@ -92,7 +92,7 @@ export default async function TenantDevicesPage({
         </div>
         <Link
           href={`/tenants/${id}/devices/new`}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -101,8 +101,82 @@ export default async function TenantDevicesPage({
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="grid gap-3 md:hidden">
+        {devices.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center text-sm text-gray-400">
+            Keine Geräte gefunden
+          </div>
+        ) : (
+          devices.map((d) => {
+            const warrantyExpiring = d.warrantyUntil && d.warrantyUntil <= thirtyDays && d.warrantyUntil >= now;
+            const warrantyExpired = d.warrantyUntil && d.warrantyUntil < now;
+            const assignedTo = d.employee
+              ? `${d.employee.firstName} ${d.employee.lastName}`
+              : d.workstation?.name ?? null;
+
+            return (
+              <Link
+                key={d.id}
+                href={`/tenants/${id}/devices/${d.id}`}
+                className="block rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-blue-300 hover:shadow-sm active:scale-[.99]"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                        {deviceTypeLabel[d.type] ?? d.type}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge(d.status)}`}>
+                        {statusLabel(d.status)}
+                      </span>
+                    </div>
+                    <p className="truncate font-semibold text-gray-950">
+                      {[d.manufacturer, d.model].filter(Boolean).join(" ") || "Unbekanntes Gerät"}
+                    </p>
+                    {d.hostname ? <p className="truncate text-xs text-gray-400">{d.hostname}</p> : null}
+                  </div>
+                  <span className="shrink-0 text-xs font-medium text-blue-600">Details</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-xs">
+                  <div>
+                    <p className="text-gray-400">Seriennummer</p>
+                    <p className="mt-0.5 truncate font-mono text-gray-700">{d.serialNumber ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Inventar</p>
+                    <p className="mt-0.5 truncate font-mono text-gray-700">{d.inventoryNumber ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Zugewiesen</p>
+                    <p className="mt-0.5 truncate text-gray-700">{assignedTo ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Standort</p>
+                    <p className="mt-0.5 truncate text-gray-700">{d.location?.name ?? "—"}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-gray-400">Garantie</p>
+                    {d.warrantyUntil ? (
+                      <p className={warrantyExpired ? "mt-0.5 font-medium text-red-600" : warrantyExpiring ? "mt-0.5 font-medium text-yellow-600" : "mt-0.5 text-gray-700"}>
+                        {formatDate(d.warrantyUntil)}
+                        {warrantyExpiring && " - läuft bald ab"}
+                        {warrantyExpired && " - abgelaufen"}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-gray-400">—</p>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white md:block">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">Typ</th>
@@ -173,6 +247,7 @@ export default async function TenantDevicesPage({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

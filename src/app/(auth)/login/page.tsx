@@ -11,6 +11,25 @@ import { decodeRequestOptions, encodeAuthenticationCredential } from "@/lib/brow
 
 type LoginPolicy = "PASSWORD_AND_PASSKEY" | "PASSWORD_ONLY" | "PASSKEY_ONLY";
 
+interface AppBrandingSettings {
+  appName: string;
+  loginSubtitle: string;
+  loginHeadline: string;
+  loginHighlight: string;
+  loginDescription: string;
+  loginFooter: string;
+}
+
+const DEFAULT_BRANDING: AppBrandingSettings = {
+  appName: "Ticket Schmiede",
+  loginSubtitle: "IT-Dokumentation & Ticketsystem",
+  loginHeadline: "IT-Dokumentation",
+  loginHighlight: "neu gedacht.",
+  loginDescription:
+    "Mandantenfähig, sicher und einfach zu bedienen. Verwalte Tickets, Geräte und Zugangsdaten an einem Ort.",
+  loginFooter: "IT Service - Sven Weigle · Alle Rechte vorbehalten",
+};
+
 const loginSchema = z.object({
   email: z.string().email("Bitte gib eine gültige E-Mail ein"),
   password: z.string().optional(),
@@ -30,7 +49,7 @@ function FeatureItem({ icon: Icon, text }: { icon: React.ElementType; text: stri
   );
 }
 
-function LoginFormContent() {
+function LoginFormContent({ branding }: { branding: AppBrandingSettings }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
@@ -115,11 +134,7 @@ function LoginFormContent() {
 
   const signInWithPasskey = async () => {
     if (passkeyLoading || !passkeyAllowed) return;
-    const email = getValues("email");
-    if (!email) {
-      setError("Bitte gib zuerst deine E-Mail-Adresse ein.");
-      return;
-    }
+    const email = getValues("email")?.trim();
     if (!window.PublicKeyCredential) {
       setError("Dieser Browser unterstützt Passkeys nicht.");
       return;
@@ -131,7 +146,7 @@ function LoginFormContent() {
       const optionsResponse = await fetch("/api/auth/passkey/authentication-options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(email ? { email } : {}),
       }).then((response) => response.json());
 
       if (!optionsResponse.success) {
@@ -152,7 +167,7 @@ function LoginFormContent() {
 
       const result = await signIn("credentials", {
         mode: "passkey",
-        email,
+        email: email ?? "",
         assertion: JSON.stringify(encodeAuthenticationCredential(credential as PublicKeyCredential)),
         redirect: false,
       });
@@ -177,8 +192,8 @@ function LoginFormContent() {
         <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4 shadow-lg">
           <Shield className="w-7 h-7 text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">Ticket Schmiede</h1>
-        <p className="text-gray-500 text-sm mt-1">IT-Dokumentation & Ticketsystem</p>
+        <h1 className="text-2xl font-bold text-gray-900">{branding.appName}</h1>
+        <p className="text-gray-500 text-sm mt-1">{branding.loginSubtitle}</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
@@ -210,7 +225,7 @@ function LoginFormContent() {
                   autoComplete="email"
                   autoFocus
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition"
-                  placeholder="name@firma.de"
+                  placeholder={passkeyAllowed ? "name@firma.de (optional für Passkey)" : "name@firma.de"}
                 />
                 {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
               </div>
@@ -292,13 +307,24 @@ function LoginFormContent() {
       </div>
 
       <p className="text-center text-gray-400 text-xs mt-6">
-        © {new Date().getFullYear()} Ticket Schmiede - Sicher & mandantenfähig
+        © {new Date().getFullYear()} {branding.appName} - Sicher & mandantenfähig
       </p>
     </div>
   );
 }
 
 export default function LoginPage() {
+  const [branding, setBranding] = useState<AppBrandingSettings>(DEFAULT_BRANDING);
+
+  useEffect(() => {
+    fetch("/api/app-branding")
+      .then((response) => response.json())
+      .then((payload) => {
+        if (payload?.data) setBranding(payload.data);
+      })
+      .catch(() => undefined);
+  }, []);
+
   return (
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-[45%] xl:w-[40%] flex-col justify-between bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-10 relative overflow-hidden">
@@ -307,7 +333,7 @@ export default function LoginPage() {
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="font-bold text-white text-lg leading-tight">Ticket Schmiede</p>
+            <p className="font-bold text-white text-lg leading-tight">{branding.appName}</p>
             <p className="text-blue-300/70 text-xs">IT-Management Platform</p>
           </div>
         </div>
@@ -315,11 +341,11 @@ export default function LoginPage() {
         <div className="relative space-y-6">
           <div>
             <h1 className="text-4xl font-bold text-white leading-tight">
-              IT-Dokumentation<br />
-              <span className="text-blue-400">neu gedacht.</span>
+              {branding.loginHeadline}<br />
+              <span className="text-blue-400">{branding.loginHighlight}</span>
             </h1>
             <p className="text-blue-200/70 mt-4 text-base leading-relaxed max-w-sm">
-              Mandantenfähig, sicher und einfach zu bedienen. Verwalte Tickets, Geräte und Zugangsdaten an einem Ort.
+              {branding.loginDescription}
             </p>
           </div>
 
@@ -331,7 +357,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="relative text-blue-400/50 text-xs">IT Service - Sven Weigle · Alle Rechte vorbehalten</p>
+        <p className="relative text-blue-400/50 text-xs">{branding.loginFooter}</p>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-50">
@@ -342,7 +368,7 @@ export default function LoginPage() {
             </div>
           }
         >
-          <LoginFormContent />
+          <LoginFormContent branding={branding} />
         </Suspense>
       </div>
     </div>

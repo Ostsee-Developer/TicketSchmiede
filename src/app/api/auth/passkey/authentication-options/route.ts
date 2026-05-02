@@ -10,7 +10,7 @@ import {
 } from "@/lib/webauthn";
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional().or(z.literal("")),
 });
 
 export async function POST(request: NextRequest) {
@@ -22,16 +22,19 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return handleZodError(parsed.error);
 
-    const user = await prisma.user.findUnique({
-      where: { email: parsed.data.email },
-      select: {
-        id: true,
-        isActive: true,
-        passkeys: { select: { credentialId: true } },
-      },
-    });
+    const email = parsed.data.email?.trim();
+    const user = email
+      ? await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            isActive: true,
+            passkeys: { select: { credentialId: true } },
+          },
+        })
+      : null;
 
-    if (!user?.isActive || user.passkeys.length === 0) {
+    if (email && (!user?.isActive || user.passkeys.length === 0)) {
       return badRequest("Für diesen Benutzer ist kein Passkey eingerichtet.");
     }
 
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
     await prisma.webAuthnChallenge.create({
       data: {
         challenge,
-        userId: user.id,
+        userId: user?.id ?? null,
         type: "authentication",
         expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       },
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
       options: publicKeyCredentialRequestOptions({
         challenge,
         rpId: rp.rpId,
-        allowCredentialIds: user.passkeys.map((passkey) => passkey.credentialId),
+        allowCredentialIds: user?.passkeys.map((passkey) => passkey.credentialId),
       }),
     });
   } catch (error) {

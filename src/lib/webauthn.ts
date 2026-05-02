@@ -23,6 +23,7 @@ export interface AuthenticationCredentialJson {
     clientDataJSON: string;
     authenticatorData: string;
     signature: string;
+    userHandle?: string | null;
   };
 }
 
@@ -40,9 +41,18 @@ export function newChallenge(): string {
 }
 
 export function getWebAuthnRequestInfo(request: Request): WebAuthnRequestInfo {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost ?? request.headers.get("host");
   const url = new URL(request.url);
-  const origin = process.env.WEBAUTHN_ORIGIN ?? url.origin;
-  const rpId = process.env.WEBAUTHN_RP_ID ?? new URL(origin).hostname;
+  const requestOrigin = host ? `${forwardedProto ?? url.protocol.replace(":", "")}://${host}` : url.origin;
+  const requestHost = new URL(requestOrigin).hostname;
+  const configuredOrigin = process.env.WEBAUTHN_ORIGIN;
+  const configuredOriginHost = configuredOrigin ? new URL(configuredOrigin).hostname : null;
+  const origin = configuredOriginHost === requestHost ? configuredOrigin! : requestOrigin;
+  const originHost = new URL(origin).hostname;
+  const configuredRpId = process.env.WEBAUTHN_RP_ID?.trim();
+  const rpId = configuredRpId && isValidRpIdForHost(configuredRpId, originHost) ? configuredRpId : originHost;
   const rpName = process.env.WEBAUTHN_RP_NAME ?? process.env.NEXT_PUBLIC_APP_NAME ?? "Ticket Schmiede";
   return { origin, rpId, rpName };
 }
@@ -68,7 +78,8 @@ export function publicKeyCredentialCreationOptions(params: {
     attestation: "none",
     authenticatorSelection: {
       userVerification: "preferred",
-      residentKey: "preferred",
+      residentKey: "required",
+      requireResidentKey: true,
     },
     excludeCredentials: params.excludeCredentialIds.map((id) => ({
       type: "public-key",
@@ -80,19 +91,24 @@ export function publicKeyCredentialCreationOptions(params: {
 
 export function publicKeyCredentialRequestOptions(params: {
   challenge: string;
-  allowCredentialIds: string[];
+  allowCredentialIds?: string[];
   rpId: string;
 }) {
+  const allowCredentialIds = params.allowCredentialIds ?? [];
   return {
     challenge: params.challenge,
     rpId: params.rpId,
     timeout: 60000,
     userVerification: "preferred",
-    allowCredentials: params.allowCredentialIds.map((id) => ({
-      type: "public-key",
-      id,
-      transports: ["internal", "hybrid", "usb", "nfc", "ble"],
-    })),
+    ...(allowCredentialIds.length > 0
+      ? {
+          allowCredentials: allowCredentialIds.map((id) => ({
+            type: "public-key",
+            id,
+            transports: ["internal", "hybrid", "usb", "nfc", "ble"],
+          })),
+        }
+      : {}),
   };
 }
 
@@ -162,6 +178,12 @@ export function verifyAuthenticationResponse(params: {
   }
 
   return { credentialId, counter: newCounter };
+}
+
+function isValidRpIdForHost(rpId: string, host: string): boolean {
+  const normalizedRpId = rpId.toLowerCase();
+  const normalizedHost = host.toLowerCase();
+  return normalizedHost === normalizedRpId || normalizedHost.endsWith(`.${normalizedRpId}`);
 }
 
 function parseClientData(clientDataJson: string) {

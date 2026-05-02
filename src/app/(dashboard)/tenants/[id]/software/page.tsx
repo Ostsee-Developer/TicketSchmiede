@@ -49,7 +49,7 @@ export default async function TenantSoftwarePage({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <Link href={`/tenants/${id}/dashboard`} className="hover:text-blue-600">{tenant.name}</Link>
@@ -61,7 +61,7 @@ export default async function TenantSoftwarePage({
         </div>
         <Link
           href={`/tenants/${id}/software/new`}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -70,8 +70,68 @@ export default async function TenantSoftwarePage({
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="grid gap-3 md:hidden">
+        {software.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center text-sm text-gray-400">
+            Keine Software gefunden
+          </div>
+        ) : (
+          software.map((s) => {
+            const expiringSoon = s.validUntil && s.validUntil <= ninetyDays && s.validUntil >= now;
+            const expired = s.validUntil && s.validUntil < now;
+            const assigned = s._count.employees + s._count.devices;
+            const overLicensed = s.licenseCount != null && assigned > s.licenseCount;
+
+            return (
+              <Link
+                key={s.id}
+                href={`/tenants/${id}/software/${s.id}`}
+                className="block rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-blue-300 hover:shadow-sm active:scale-[.99]"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-950">
+                      {s.name}
+                      {s.version ? <span className="ml-2 text-xs font-normal text-gray-400">v{s.version}</span> : null}
+                    </p>
+                    <p className="truncate text-xs text-gray-500">{s.vendor ?? "Kein Hersteller"}</p>
+                  </div>
+                  <span className="shrink-0 rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    {licenseTypeLabel[s.licenseType] ?? s.licenseType}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 text-xs">
+                  <div>
+                    <p className="text-gray-400">Lizenzen</p>
+                    <p className="mt-0.5 font-semibold text-gray-800">{s.licenseCount ?? "∞"}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Zugewiesen</p>
+                    <p className={overLicensed ? "mt-0.5 font-bold text-red-600" : "mt-0.5 font-semibold text-gray-800"}>
+                      {assigned}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Gültig bis</p>
+                    {s.validUntil ? (
+                      <p className={expired ? "mt-0.5 font-medium text-red-600" : expiringSoon ? "mt-0.5 font-medium text-yellow-600" : "mt-0.5 text-gray-700"}>
+                        {formatDate(s.validUntil)}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-gray-400">—</p>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white md:block">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
@@ -139,6 +199,7 @@ export default async function TenantSoftwarePage({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

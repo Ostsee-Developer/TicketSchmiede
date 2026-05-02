@@ -55,7 +55,7 @@ export function AppShell({ children, sidebarProps }: AppShellProps) {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background lg:h-auto lg:min-h-screen lg:overflow-visible">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -76,10 +76,12 @@ export function AppShell({ children, sidebarProps }: AppShellProps) {
       />
 
       {/* Main area */}
-      <div className="flex flex-1 flex-col min-w-0 transition-all duration-250 lg:pl-0">
+      <div className="flex min-w-0 flex-1 flex-col transition-all duration-250 lg:pl-0">
         <Topbar onMenuClick={() => setMobileOpen(true)} onSearchClick={openSearch} />
-        <main className="flex-1 p-4 sm:p-6 max-w-screen-xl mx-auto w-full">
-          {children}
+        <main className="mobile-scroll-pane min-h-0 w-full flex-1 overflow-y-auto p-4 sm:p-6 lg:mx-auto lg:max-w-screen-2xl lg:overflow-visible">
+          <div className="mobile-sticky-title">
+            {children}
+          </div>
         </main>
       </div>
 

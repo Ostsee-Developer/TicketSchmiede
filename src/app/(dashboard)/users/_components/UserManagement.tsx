@@ -10,16 +10,20 @@ import {
   CircleOff,
   KeyRound,
   Lock,
+  Mail,
   Pencil,
   Plus,
+  RefreshCcw,
   Search,
   ShieldCheck,
+  Trash2,
   UserRoundCog,
   Users,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import { decodeCreationOptions, encodeRegistrationCredential } from "@/lib/browser-webauthn";
 
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -63,6 +67,7 @@ interface User {
   lockedUntil: Date | string | null;
   createdAt: Date | string;
   tenantRoles: TenantRole[];
+  passkeys?: { id: string; name: string | null; createdAt: Date | string; lastUsedAt: Date | string | null }[];
 }
 
 const createSchema = z.object({
@@ -88,7 +93,12 @@ const roleAssignSchema = z.object({
 type CreateData = z.infer<typeof createSchema>;
 type EditData = z.infer<typeof editSchema>;
 type RoleAssignData = z.infer<typeof roleAssignSchema>;
-type ModalState = "create" | { type: "edit"; user: User } | { type: "roles"; user: User } | null;
+type ModalState =
+  | "create"
+  | { type: "edit"; user: User }
+  | { type: "roles"; user: User }
+  | { type: "passkeys"; user: User }
+  | null;
 type StatusFilter = "all" | "active" | "inactive" | "locked" | "2fa";
 
 const inputCls =
@@ -151,6 +161,9 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
       )}
       {modal !== null && modal !== "create" && modal.type === "roles" && (
         <RoleModal user={modal.user} tenants={tenants} onClose={() => setModal(null)} onSuccess={refresh} />
+      )}
+      {modal !== null && modal !== "create" && modal.type === "passkeys" && (
+        <PasskeyModal user={modal.user} onClose={() => setModal(null)} onSuccess={refresh} />
       )}
 
       <div className="space-y-5">
@@ -227,6 +240,7 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
                   user={user}
                   onEdit={() => setModal({ type: "edit", user })}
                   onRoles={() => setModal({ type: "roles", user })}
+                  onPasskeys={() => setModal({ type: "passkeys", user })}
                 />
               ))}
             </div>
@@ -239,6 +253,7 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
                       <th className="px-4 py-3 text-left font-semibold text-gray-700">Benutzer</th>
                       <th className="px-4 py-3 text-left font-semibold text-gray-700">Rollen / Mandanten</th>
                       <th className="px-4 py-3 text-center font-semibold text-gray-700">2FA</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-700">Passkeys</th>
                       <th className="px-4 py-3 text-left font-semibold text-gray-700">Letzter Login</th>
                       <th className="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
                       <th className="px-4 py-3 text-right font-semibold text-gray-700">Aktionen</th>
@@ -263,6 +278,9 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
                             <span className="text-xs text-gray-400">-</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center text-xs font-medium text-gray-600">
+                          {user.passkeys?.length ?? 0}
+                        </td>
                         <td className="px-4 py-3 text-xs text-gray-500">
                           {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Noch nie"}
                         </td>
@@ -273,6 +291,9 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
                           <div className="flex justify-end gap-2">
                             <IconButton label="Rollen" onClick={() => setModal({ type: "roles", user })}>
                               <KeyRound className="h-4 w-4" />
+                            </IconButton>
+                            <IconButton label="Passkeys" onClick={() => setModal({ type: "passkeys", user })}>
+                              <ShieldCheck className="h-4 w-4" />
                             </IconButton>
                             <IconButton label="Bearbeiten" onClick={() => setModal({ type: "edit", user })}>
                               <Pencil className="h-4 w-4" />
@@ -510,6 +531,128 @@ function RoleModal({
   );
 }
 
+function PasskeyModal({ user, onClose, onSuccess }: { user: User; onClose: () => void; onSuccess: () => void }) {
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const createPasskey = async () => {
+    if (!window.PublicKeyCredential) {
+      setServerError("Dieser Browser unterstützt Passkeys nicht.");
+      return;
+    }
+
+    setBusy("create");
+    setServerError(null);
+    try {
+      const optionsPayload = await fetch(`/api/passkeys/users/${user.id}/register-options`, { method: "POST" }).then((r) =>
+        r.json()
+      );
+      if (!optionsPayload.success) throw new Error(optionsPayload.error ?? "Passkey konnte nicht vorbereitet werden.");
+
+      const credential = await navigator.credentials.create({
+        publicKey: decodeCreationOptions(optionsPayload.data.options),
+      });
+      if (!credential) throw new Error("Passkey-Erstellung wurde abgebrochen.");
+
+      const registerPayload = await fetch(`/api/passkeys/users/${user.id}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Verwalteter Passkey",
+          credential: encodeRegistrationCredential(credential as PublicKeyCredential),
+        }),
+      }).then((r) => r.json());
+      if (!registerPayload.success) throw new Error(registerPayload.error ?? "Passkey konnte nicht gespeichert werden.");
+      onSuccess();
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : "Passkey-Erstellung fehlgeschlagen.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resetPasskeys = async (email = false) => {
+    setBusy(email ? "email" : "reset");
+    setServerError(null);
+    const url = email ? `/api/passkeys/users/${user.id}/email-reset` : `/api/passkeys/users/${user.id}`;
+    const response = await fetch(url, { method: email ? "POST" : "DELETE" });
+    const payload = await response.json().catch(() => ({}));
+    setBusy(null);
+    if (response.ok) onSuccess();
+    else setServerError(payload.error ?? "Passkey-Reset fehlgeschlagen.");
+  };
+
+  const deletePasskey = async (passkeyId: string) => {
+    setBusy(passkeyId);
+    const response = await fetch(`/api/passkeys/users/${user.id}?passkeyId=${passkeyId}`, { method: "DELETE" });
+    setBusy(null);
+    if (response.ok) onSuccess();
+  };
+
+  return (
+    <ModalWrapper title={`Passkeys - ${user.name}`} onClose={onClose} wide>
+      <div className="space-y-5">
+        <ServerError message={serverError} />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={createPasskey}
+            disabled={busy !== null}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+          >
+            <Plus className="h-4 w-4" />
+            Passkey erstellen
+          </button>
+          <button
+            type="button"
+            onClick={() => resetPasskeys(false)}
+            disabled={busy !== null || (user.passkeys?.length ?? 0) === 0}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Zurücksetzen
+          </button>
+          <button
+            type="button"
+            onClick={() => resetPasskeys(true)}
+            disabled={busy !== null}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <Mail className="h-4 w-4" />
+            Per E-Mail resetten
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {(user.passkeys?.length ?? 0) === 0 ? (
+            <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">
+              Keine Passkeys eingerichtet.
+            </p>
+          ) : (
+            user.passkeys?.map((passkey) => (
+              <div key={passkey.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{passkey.name ?? "Passkey"}</p>
+                  <p className="text-xs text-gray-500">Erstellt: {formatDateTime(passkey.createdAt)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => deletePasskey(passkey.id)}
+                  disabled={busy === passkey.id}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Passkey löschen"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </ModalWrapper>
+  );
+}
+
 function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -524,7 +667,17 @@ function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
   );
 }
 
-function UserCard({ user, onEdit, onRoles }: { user: User; onEdit: () => void; onRoles: () => void }) {
+function UserCard({
+  user,
+  onEdit,
+  onRoles,
+  onPasskeys,
+}: {
+  user: User;
+  onEdit: () => void;
+  onRoles: () => void;
+  onPasskeys: () => void;
+}) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -538,10 +691,14 @@ function UserCard({ user, onEdit, onRoles }: { user: User; onEdit: () => void; o
         <span>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Noch nie angemeldet"}</span>
         {user.twoFactorEnabled ? <span className="font-medium text-emerald-700">2FA aktiv</span> : null}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <button onClick={onRoles} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">
           <KeyRound className="h-4 w-4" />
           Rollen
+        </button>
+        <button onClick={onPasskeys} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">
+          <ShieldCheck className="h-4 w-4" />
+          Keys
         </button>
         <button onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">
           <Pencil className="h-4 w-4" />

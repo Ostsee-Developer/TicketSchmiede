@@ -14,6 +14,7 @@ const routeLabels: Record<string, string> = {
   "/users": "Benutzer",
   "/tenants": "Mandanten",
   "/audit-log": "Audit-Log",
+  "/admin": "System",
 };
 
 function usePageTitle() {
