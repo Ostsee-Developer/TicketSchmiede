@@ -1,4 +1,5 @@
 import { AuditAction, Prisma } from "@prisma/client";
+import { headers } from "next/headers";
 import { prisma } from "./prisma";
 
 interface AuditOptions {
@@ -15,6 +16,8 @@ interface AuditOptions {
 
 export async function createAuditLog(options: AuditOptions): Promise<void> {
   let userEmail = options.userEmail ?? null;
+  let ipAddress = options.ipAddress ?? null;
+  let userAgent = options.userAgent ?? null;
 
   if (!userEmail && options.userId) {
     try {
@@ -28,6 +31,17 @@ export async function createAuditLog(options: AuditOptions): Promise<void> {
     }
   }
 
+  if (!ipAddress || !userAgent) {
+    try {
+      const headerStore = await headers();
+      const info = getClientInfoFromHeaders(headerStore);
+      ipAddress = ipAddress ?? info.ipAddress;
+      userAgent = userAgent ?? info.userAgent;
+    } catch (_error) {
+      // Route handlers usually pass Request explicitly; background work may not have headers.
+    }
+  }
+
   const data = {
     tenantId: options.tenantId ?? null,
     userId: options.userId ?? null,
@@ -36,11 +50,12 @@ export async function createAuditLog(options: AuditOptions): Promise<void> {
     resource: options.resource ?? null,
     resourceId: options.resourceId ?? null,
     details: options.details ? (options.details as Prisma.InputJsonObject) : Prisma.JsonNull,
-    ipAddress: options.ipAddress ?? null,
-    userAgent: options.userAgent ?? null,
+    ipAddress,
+    userAgent,
   };
 
   try {
+    if (await isDuplicateAuditLog(data)) return;
     await prisma.auditLog.create({ data });
   } catch (error) {
     // FK violation on userId (stale JWT after DB reset) — retry without the FK reference.
@@ -66,16 +81,26 @@ export function getClientInfo(request: Request): {
   ipAddress: string | null;
   userAgent: string | null;
 } {
-  const ipAddress = getForwardedIp(request.headers);
-  const userAgent = request.headers.get("user-agent") ?? null;
+  return getClientInfoFromHeaders(request.headers);
+}
+
+function getClientInfoFromHeaders(headers: Pick<Headers, "get">): {
+  ipAddress: string | null;
+  userAgent: string | null;
+} {
+  const ipAddress = getForwardedIp(headers);
+  const userAgent = headers.get("user-agent") ?? null;
   return { ipAddress, userAgent };
 }
 
-function getForwardedIp(headers: Headers): string | null {
+function getForwardedIp(headers: Pick<Headers, "get">): string | null {
   const candidates = [
     headers.get("cf-connecting-ip"),
+    headers.get("true-client-ip"),
     headers.get("x-real-ip"),
     headers.get("x-vercel-forwarded-for"),
+    headers.get("x-client-ip"),
+    headers.get("fastly-client-ip"),
     headers.get("x-forwarded-for"),
     headers.get("forwarded"),
   ].filter(Boolean) as string[];
@@ -107,6 +132,33 @@ function normalizeIp(value: string | null): string | null {
   }
 
   return ip || null;
+}
+
+async function isDuplicateAuditLog(data: {
+  tenantId: string | null;
+  userId: string | null;
+  userEmail: string | null;
+  action: AuditAction;
+  resource: string | null;
+  resourceId: string | null;
+  ipAddress: string | null;
+}) {
+  const duplicateWindowMs = 3000;
+  const recent = await prisma.auditLog.findFirst({
+    where: {
+      tenantId: data.tenantId,
+      userId: data.userId,
+      userEmail: data.userEmail,
+      action: data.action,
+      resource: data.resource,
+      resourceId: data.resourceId,
+      ipAddress: data.ipAddress,
+      createdAt: { gte: new Date(Date.now() - duplicateWindowMs) },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(recent);
 }
 
 export function diffObjects(

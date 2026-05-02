@@ -27,6 +27,7 @@ export default async function DashboardLayout({
         isSuperAdmin: session.user.isSuperAdmin,
         userName: session.user.name ?? undefined,
         userEmail: session.user.email ?? undefined,
+        userImage: session.user.image ?? undefined,
       }}
     >
       {children}

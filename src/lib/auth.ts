@@ -66,6 +66,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: true,
             email: true,
             name: true,
+            avatarUrl: true,
             passwordHash: true,
             isSuperAdmin: true,
             isActive: true,
@@ -240,6 +241,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: user.id,
             email: user.email,
             name: user.name,
+            image: user.avatarUrl,
             isSuperAdmin: user.isSuperAdmin,
           };
         }
@@ -344,6 +346,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
+          image: user.avatarUrl,
           isSuperAdmin: user.isSuperAdmin,
         };
         } catch (err) {
@@ -365,6 +368,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string;
         session.user.isSuperAdmin = token.isSuperAdmin as boolean;
+        const currentUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { email: true, name: true, avatarUrl: true, isSuperAdmin: true },
+        });
+        if (currentUser) {
+          session.user.email = currentUser.email;
+          session.user.name = currentUser.name;
+          session.user.image = currentUser.avatarUrl ?? undefined;
+          session.user.isSuperAdmin = currentUser.isSuperAdmin;
+        }
       }
       return session;
     },
@@ -381,6 +394,7 @@ declare module "next-auth" {
       id: string;
       email: string;
       name: string;
+      image?: string;
       isSuperAdmin: boolean;
     };
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Save, ShieldCheck } from "lucide-react";
+import { DatabaseBackup, Mail, Play, Save, ShieldCheck } from "lucide-react";
 
 type LoginPolicy = "PASSWORD_AND_PASSKEY" | "PASSWORD_ONLY" | "PASSKEY_ONLY";
 
@@ -12,6 +12,26 @@ interface AppBrandingSettings {
   loginHighlight: string;
   loginDescription: string;
   loginFooter: string;
+}
+
+interface SmtpSettings {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  from: string;
+  passwordSet: boolean;
+  password?: string;
+}
+
+interface BackupSettings {
+  enabled: boolean;
+  directory: string;
+  retentionDays: number;
+  includeAuditLog: boolean;
+  includeSecrets: boolean;
+  includeDatabase: boolean;
+  includeFiles: boolean;
 }
 
 const policyLabels: Record<LoginPolicy, string> = {
@@ -26,12 +46,18 @@ const inputClass =
 export function SystemSettingsClient({
   initialBranding,
   initialPolicy,
+  initialSmtp,
+  initialBackup,
 }: {
   initialBranding: AppBrandingSettings;
   initialPolicy: LoginPolicy;
+  initialSmtp: SmtpSettings;
+  initialBackup: BackupSettings;
 }) {
   const [branding, setBranding] = useState(initialBranding);
   const [policy, setPolicy] = useState(initialPolicy);
+  const [smtp, setSmtp] = useState<SmtpSettings>({ ...initialSmtp, password: "" });
+  const [backup, setBackup] = useState(initialBackup);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +78,58 @@ export function SystemSettingsClient({
       setMessage("Loginseite wurde aktualisiert.");
     } else {
       setError(payload.error ?? "Speichern fehlgeschlagen.");
+    }
+  };
+
+  const saveSmtp = async () => {
+    setSaving("smtp");
+    setError(null);
+    setMessage(null);
+    const response = await fetch("/api/admin/system-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ smtp }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSaving(null);
+    if (response.ok && payload.success) {
+      setSmtp({ ...payload.data.smtp, password: "" });
+      setMessage("SMTP-Einstellungen wurden gespeichert.");
+    } else {
+      setError(payload.error ?? "SMTP konnte nicht gespeichert werden.");
+    }
+  };
+
+  const saveBackup = async () => {
+    setSaving("backup");
+    setError(null);
+    setMessage(null);
+    const response = await fetch("/api/admin/system-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backup }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSaving(null);
+    if (response.ok && payload.success) {
+      setBackup(payload.data.backup);
+      setMessage("Backup-Einstellungen wurden gespeichert.");
+    } else {
+      setError(payload.error ?? "Backup-Einstellungen konnten nicht gespeichert werden.");
+    }
+  };
+
+  const runBackup = async () => {
+    setSaving("run-backup");
+    setError(null);
+    setMessage(null);
+    const response = await fetch("/api/admin/backups/run", { method: "POST" });
+    const payload = await response.json().catch(() => ({}));
+    setSaving(null);
+    if (response.ok && payload.success) {
+      setMessage(`Backup erstellt: ${payload.data.filePath}`);
+    } else {
+      setError(payload.error ?? "Backup konnte nicht erstellt werden.");
     }
   };
 
@@ -113,6 +191,112 @@ export function SystemSettingsClient({
               {policyLabels[item]}
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+              <Mail className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-gray-950">SMTP</h2>
+              <p className="text-sm text-gray-500">Mailversand für Passkey-Reset und Benachrichtigungen.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={saveSmtp}
+            disabled={saving !== null}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+          >
+            <Save className="h-4 w-4" />
+            {saving === "smtp" ? "Speichern..." : "SMTP speichern"}
+          </button>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="SMTP Host">
+            <input className={inputClass} value={smtp.host} onChange={(e) => setSmtp({ ...smtp, host: e.target.value })} placeholder="smtp.example.com" />
+          </Field>
+          <Field label="Port">
+            <input className={inputClass} type="number" value={smtp.port} onChange={(e) => setSmtp({ ...smtp, port: Number(e.target.value) })} />
+          </Field>
+          <Field label="Benutzer">
+            <input className={inputClass} value={smtp.user} onChange={(e) => setSmtp({ ...smtp, user: e.target.value })} />
+          </Field>
+          <Field label="Absender">
+            <input className={inputClass} value={smtp.from} onChange={(e) => setSmtp({ ...smtp, from: e.target.value })} placeholder="support@example.com" />
+          </Field>
+          <Field label={smtp.passwordSet ? "Passwort ersetzen" : "Passwort"}>
+            <input className={inputClass} type="password" value={smtp.password ?? ""} onChange={(e) => setSmtp({ ...smtp, password: e.target.value })} placeholder={smtp.passwordSet ? "Gespeichert - leer lassen zum Behalten" : ""} />
+          </Field>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={smtp.secure} onChange={(e) => setSmtp({ ...smtp, secure: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            SSL/TLS verwenden
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <DatabaseBackup className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-gray-950">Backups</h2>
+              <p className="text-sm text-gray-500">1:1-Archiv mit Datenbankexport und hochgeladenen Dateien erstellen.</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={runBackup}
+              disabled={saving !== null}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            >
+              <Play className="h-4 w-4" />
+              {saving === "run-backup" ? "Erstelle..." : "Backup jetzt"}
+            </button>
+            <button
+              type="button"
+              onClick={saveBackup}
+              disabled={saving !== null}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              <Save className="h-4 w-4" />
+              {saving === "backup" ? "Speichern..." : "Backup speichern"}
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="Backup-Ordner">
+            <input className={inputClass} value={backup.directory} onChange={(e) => setBackup({ ...backup, directory: e.target.value })} />
+          </Field>
+          <Field label="Aufbewahrung in Tagen">
+            <input className={inputClass} type="number" min={1} value={backup.retentionDays} onChange={(e) => setBackup({ ...backup, retentionDays: Number(e.target.value) })} />
+          </Field>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={backup.enabled} onChange={(e) => setBackup({ ...backup, enabled: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            Backup-System aktiv
+          </label>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={backup.includeAuditLog} onChange={(e) => setBackup({ ...backup, includeAuditLog: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            Audit-Log einschließen
+          </label>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={backup.includeDatabase} onChange={(e) => setBackup({ ...backup, includeDatabase: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            Datenbank-Dump einschließen
+          </label>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={backup.includeFiles} onChange={(e) => setBackup({ ...backup, includeFiles: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            Hochgeladene Dateien einschließen
+          </label>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 text-sm font-medium text-yellow-800 lg:col-span-2">
+            <input type="checkbox" checked={backup.includeSecrets} onChange={(e) => setBackup({ ...backup, includeSecrets: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            Secrets einschließen (Passwort-Hashes, Passkey-Schlüssel, SMTP-Einstellungen)
+          </label>
         </div>
       </section>
 

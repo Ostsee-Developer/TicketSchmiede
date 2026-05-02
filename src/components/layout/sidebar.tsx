@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -22,8 +23,8 @@ import {
   ChevronRight,
   Shield,
   Search,
-  Settings,
   SlidersHorizontal,
+  UserRound,
 } from "lucide-react";
 
 interface NavItem {
@@ -44,6 +45,7 @@ interface SidebarProps {
   isSuperAdmin?: boolean;
   userName?: string;
   userEmail?: string;
+  userImage?: string;
   collapsed?: boolean;
   mobileOpen?: boolean;
   onToggleCollapse?: () => void;
@@ -57,6 +59,7 @@ export function Sidebar({
   isSuperAdmin,
   userName,
   userEmail,
+  userImage,
   collapsed = false,
   mobileOpen = false,
   onToggleCollapse,
@@ -105,7 +108,7 @@ export function Sidebar({
   ];
 
   const accountItems: NavItem[] = [
-    { label: "Sicherheit", href: "/settings/security", icon: Settings },
+    { label: "Konto", href: "/settings/account", icon: UserRound },
   ];
 
   const sections: NavSection[] = [
@@ -253,9 +256,20 @@ export function Sidebar({
               collapsed && "lg:justify-center lg:px-0",
             )}
           >
-            <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-              {userInitials}
-            </div>
+            {userImage ? (
+              <Image
+                src={userImage}
+                alt=""
+                width={32}
+                height={32}
+                sizes="32px"
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                {userInitials}
+              </div>
+            )}
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-sidebar-foreground truncate">{userName}</p>

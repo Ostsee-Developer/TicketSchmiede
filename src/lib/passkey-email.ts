@@ -1,27 +1,26 @@
+import { getSmtpRuntimeConfig } from "./system-settings";
+
 export async function sendPasskeyResetEmail(params: {
   to: string;
   name: string;
   resetBy: string;
 }) {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASSWORD;
-  const from = process.env.SMTP_FROM ?? user ?? "";
-  if (!host || !user || !pass || !from) return false;
+  const config = await getSmtpRuntimeConfig();
+  if (!config) return false;
 
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "Ticket Schmiede";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const securityUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/settings/security` : "";
-  const nodemailer = await import("nodemailer");
-  const transporter = nodemailer.default.createTransport({
-    host,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: { user, pass },
+    const nodemailer = await import("nodemailer");
+    const transporter = nodemailer.default.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
   });
 
   await transporter.sendMail({
-    from,
+    from: config.from,
     to: params.to,
     subject: `${appName}: Passkeys wurden zurückgesetzt`,
     html: `

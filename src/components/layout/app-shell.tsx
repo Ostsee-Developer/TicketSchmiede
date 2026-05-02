@@ -13,6 +13,7 @@ interface AppShellProps {
     isSuperAdmin?: boolean;
     userName?: string;
     userEmail?: string;
+    userImage?: string;
   };
 }
 
