@@ -21,8 +21,8 @@ export default async function PortalManagementPage() {
       department: true,
       position: true,
       devices: {
-        select: { id: true, name: true, deviceType: true, manufacturer: true, model: true },
-        orderBy: { name: "asc" },
+        select: { id: true, type: true, manufacturer: true, model: true, inventoryNumber: true },
+        orderBy: { inventoryNumber: "asc" },
       },
     },
   });
@@ -54,7 +54,7 @@ export default async function PortalManagementPage() {
                 <td className="px-4 py-3">
                   {employee.devices.length === 0 ? <span className="text-gray-400">Keine Geräte</span> : (
                     <ul className="space-y-1">
-                      {employee.devices.map((device) => (<li key={device.id} className="text-gray-700">{device.name} · {device.deviceType}{(device.manufacturer || device.model) ? ` (${device.manufacturer ?? ""} ${device.model ?? ""})` : ""}</li>))}
+                      {employee.devices.map((device) => (<li key={device.id} className="text-gray-700">{device.type}{device.inventoryNumber ? ` · Inventar ${device.inventoryNumber}` : ""}{(device.manufacturer || device.model) ? ` (${device.manufacturer ?? ""} ${device.model ?? ""})` : ""}</li>))}
                     </ul>
                   )}
                 </td>

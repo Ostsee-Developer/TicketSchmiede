@@ -75,7 +75,7 @@ export default async function PortalLayout({
       </main>
 
       {/* ── Mobile bottom nav ── */}
-      <PortalMobileNav />
+      <PortalMobileNav isCustomerAdmin={ctx.isCustomerAdmin} />
     </div>
   );
 }
