@@ -10,8 +10,8 @@ import { Shield, Lock, Server, Users, CheckCircle2, Eye, EyeOff } from "lucide-r
 
 const loginSchema = z.object({
   email: z.string().email("Bitte gib eine gültige E-Mail ein"),
-  password: z.string().min(1, "Passwort ist erforderlich"),
-  totp: z.string().optional(),
+  password: z.string().min(8, "Passwort muss mindestens 8 Zeichen lang sein"),
+  totp: z.string().regex(/^\d{6}$/, "Code muss 6 Ziffern sein").optional(),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -34,7 +34,7 @@ function LoginFormContent() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [requiresTotp, setRequirestotp] = useState(false);
+  const [requiresTotp, setRequiresTotp] = useState(false);
 
   const {
     register,
@@ -44,24 +44,31 @@ function LoginFormContent() {
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
 
   const onSubmit = async (data: LoginForm) => {
+    if (loading) return; // Prevent double-click
     setLoading(true);
     setError(null);
 
     // If TOTP step not yet shown, check if it's required
     if (!requiresTotp) {
-      const check = await fetch("/api/auth/check-2fa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      }).then((r) => r.json()).catch(() => null);
+      try {
+        const check = await fetch("/api/auth/check-2fa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: data.email, password: data.password }),
+        }).then((r) => r.json());
 
-      if (check?.requiresTotp) {
-        setLoading(false);
-        setRequirestotp(true);
-        return;
-      }
-      if (check?.error) {
-        setError("E-Mail oder Passwort falsch. Bitte überprüfe deine Eingaben.");
+        if (check?.requiresTotp) {
+          setLoading(false);
+          setRequiresTotp(true);
+          return;
+        }
+        if (check?.error) {
+          setError("E-Mail oder Passwort falsch. Bitte überprüfe deine Eingaben.");
+          setLoading(false);
+          return;
+        }
+      } catch (_err) {
+        setError("Verbindungsfehler. Bitte versuche es später erneut.");
         setLoading(false);
         return;
       }
@@ -75,11 +82,11 @@ function LoginFormContent() {
     });
 
     if (result?.error) {
-      if (result.error.includes("TOTP") || result.error.includes("2FA")) {
-        setError("Der Zwei-Faktor-Code ist ungültig oder abgelaufen.");
-      } else {
-        setError("E-Mail oder Passwort falsch. Bitte überprüfe deine Eingaben.");
-      }
+      setError(
+        result.error.includes("TOTP") || result.error.includes("2FA")
+          ? "Der Zwei-Faktor-Code ist ungültig oder abgelaufen."
+          : "E-Mail oder Passwort falsch. Bitte überprüfe deine Eingaben."
+      );
       setLoading(false);
       return;
     }
@@ -186,7 +193,7 @@ function LoginFormContent() {
                 <button
                   type="button"
                   className="text-blue-600 hover:underline"
-                  onClick={() => { setRequirestotp(false); setError(null); }}
+                  onClick={() => { setRequiresTotp(false); setError(null); }}
                 >
                   Zurück
                 </button>
@@ -269,7 +276,7 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="relative">
           <p className="text-blue-400/50 text-xs">
-            Sicherer Zugang · Alle Rechte vorbehalten
+            IT Service - Sven Weigle · Alle Rechte vorbehalten 
           </p>
         </div>
       </div>

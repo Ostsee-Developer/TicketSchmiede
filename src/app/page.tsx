@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { Role } from "@prisma/client";
+import { getLatestUserRole, isEmployeePortalRole } from "@/lib/access-role";
 
 export default async function RootPage() {
   const session = await auth();
@@ -9,17 +8,10 @@ export default async function RootPage() {
 
   if (session.user.isSuperAdmin) redirect("/dashboard");
 
-  // Determine where to send the user based on their role
-  const userRole = await prisma.userTenantRole.findFirst({
-    where: { userId: session.user.id },
-    select: { role: true },
-    orderBy: { createdAt: "desc" },
-  });
-
+  const userRole = await getLatestUserRole(session.user.id);
   if (!userRole) redirect("/login");
 
-  const customerRoles: Role[] = [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER];
-  if (customerRoles.includes(userRole.role)) {
+  if (isEmployeePortalRole(userRole)) {
     redirect("/portal/tickets");
   }
 

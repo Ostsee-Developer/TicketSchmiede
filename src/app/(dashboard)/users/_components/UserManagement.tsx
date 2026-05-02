@@ -1,10 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  CheckCircle2,
+  CircleOff,
+  KeyRound,
+  Lock,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+  UserRoundCog,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 
 const roleLabel: Record<string, string> = {
@@ -17,12 +31,12 @@ const roleLabel: Record<string, string> = {
 };
 
 const roleBadge: Record<string, string> = {
-  SUPER_ADMIN: "bg-red-100 text-red-700",
-  INTERNAL_ADMIN: "bg-blue-100 text-blue-700",
-  TECHNICIAN: "bg-purple-100 text-purple-700",
-  CUSTOMER_ADMIN: "bg-green-100 text-green-700",
-  CUSTOMER_USER: "bg-gray-100 text-gray-600",
-  READ_ONLY: "bg-yellow-100 text-yellow-700",
+  SUPER_ADMIN: "border-red-200 bg-red-50 text-red-700",
+  INTERNAL_ADMIN: "border-blue-200 bg-blue-50 text-blue-700",
+  TECHNICIAN: "border-violet-200 bg-violet-50 text-violet-700",
+  CUSTOMER_ADMIN: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  CUSTOMER_USER: "border-gray-200 bg-gray-50 text-gray-600",
+  READ_ONLY: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
 interface TenantRole {
@@ -74,6 +88,209 @@ const roleAssignSchema = z.object({
 type CreateData = z.infer<typeof createSchema>;
 type EditData = z.infer<typeof editSchema>;
 type RoleAssignData = z.infer<typeof roleAssignSchema>;
+type ModalState = "create" | { type: "edit"; user: User } | { type: "roles"; user: User } | null;
+type StatusFilter = "all" | "active" | "inactive" | "locked" | "2fa";
+
+const inputCls =
+  "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+
+export function UserManagement({ users, tenants }: { users: User[]; tenants: Tenant[] }) {
+  const router = useRouter();
+  const [modal, setModal] = useState<ModalState>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+
+  const stats = useMemo(() => {
+    const locked = users.filter(isLocked).length;
+    return {
+      total: users.length,
+      active: users.filter((user) => user.isActive && !isLocked(user)).length,
+      locked,
+      twoFactor: users.filter((user) => user.twoFactorEnabled).length,
+    };
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const haystack = [
+        user.name,
+        user.email,
+        user.isSuperAdmin ? "Super Admin" : "",
+        ...user.tenantRoles.flatMap((tenantRole) => [
+          roleLabel[tenantRole.role] ?? tenantRole.role,
+          tenantRole.tenant.name,
+        ]),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesQuery = needle.length === 0 || haystack.includes(needle);
+      const matchesStatus =
+        status === "all" ||
+        (status === "active" && user.isActive && !isLocked(user)) ||
+        (status === "inactive" && !user.isActive) ||
+        (status === "locked" && isLocked(user)) ||
+        (status === "2fa" && user.twoFactorEnabled);
+
+      return matchesQuery && matchesStatus;
+    });
+  }, [query, status, users]);
+
+  const refresh = () => {
+    setModal(null);
+    router.refresh();
+  };
+
+  return (
+    <>
+      {modal === "create" && <CreateModal onClose={() => setModal(null)} onSuccess={refresh} />}
+      {modal !== null && modal !== "create" && modal.type === "edit" && (
+        <EditModal user={modal.user} onClose={() => setModal(null)} onSuccess={refresh} />
+      )}
+      {modal !== null && modal !== "create" && modal.type === "roles" && (
+        <RoleModal user={modal.user} tenants={tenants} onClose={() => setModal(null)} onSuccess={refresh} />
+      )}
+
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Administration</p>
+            <h1 className="mt-1 text-2xl font-bold text-gray-950">Benutzer & Rechte</h1>
+            <p className="mt-1 text-sm text-gray-500">Konten, Mandantenrollen und Sicherheitsstatus zentral verwalten.</p>
+          </div>
+          <button
+            onClick={() => setModal("create")}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Neuer Benutzer
+          </button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard icon={Users} label="Benutzer" value={stats.total} />
+          <StatCard icon={CheckCircle2} label="Aktiv" value={stats.active} />
+          <StatCard icon={Lock} label="Gesperrt" value={stats.locked} />
+          <StatCard icon={ShieldCheck} label="2FA aktiv" value={stats.twoFactor} />
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <label className="relative block lg:max-w-md lg:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Nach Name, E-Mail, Rolle oder Mandant suchen"
+                className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
+              {[
+                ["all", "Alle"],
+                ["active", "Aktiv"],
+                ["inactive", "Inaktiv"],
+                ["locked", "Gesperrt"],
+                ["2fa", "2FA"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setStatus(value as StatusFilter)}
+                  className={`h-10 shrink-0 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                    status === value
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {filteredUsers.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+            <UserRoundCog className="mx-auto h-10 w-10 text-gray-300" />
+            <h2 className="mt-3 text-sm font-semibold text-gray-900">Keine passenden Benutzer</h2>
+            <p className="mt-1 text-sm text-gray-500">Passe Suche oder Filter an.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 lg:hidden">
+              {filteredUsers.map((user) => (
+                <UserCard
+                  key={user.id}
+                  user={user}
+                  onEdit={() => setModal({ type: "edit", user })}
+                  onRoles={() => setModal({ type: "roles", user })}
+                />
+              ))}
+            </div>
+
+            <div className="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm lg:block">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Benutzer</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Rollen / Mandanten</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-700">2FA</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Letzter Login</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700">Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="transition-colors hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <UserIdentity user={user} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <RoleBadges user={user} />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {user.twoFactorEnabled ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              Aktiv
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Noch nie"}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <StatusBadge user={user} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <IconButton label="Rollen" onClick={() => setModal({ type: "roles", user })}>
+                              <KeyRound className="h-4 w-4" />
+                            </IconButton>
+                            <IconButton label="Bearbeiten" onClick={() => setModal({ type: "edit", user })}>
+                              <Pencil className="h-4 w-4" />
+                            </IconButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
 
 function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [serverError, setServerError] = useState<string | null>(null);
@@ -89,9 +306,8 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (res.ok) {
-      onSuccess();
-    } else {
+    if (res.ok) onSuccess();
+    else {
       const json = await res.json().catch(() => ({}));
       setServerError(json.error ?? "Fehler beim Speichern");
     }
@@ -100,7 +316,7 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   return (
     <ModalWrapper title="Neuer Benutzer" onClose={onClose}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {serverError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{serverError}</p>}
+        <ServerError message={serverError} />
         <Field label="Name" error={errors.name?.message}>
           <input {...register("name")} type="text" placeholder="Max Mustermann" className={inputCls} />
         </Field>
@@ -108,12 +324,11 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <input {...register("email")} type="email" placeholder="max@firma.de" className={inputCls} />
         </Field>
         <Field label="Passwort (min. 12 Zeichen)" error={errors.password?.message}>
-          <input {...register("password")} type="password" placeholder="••••••••••••" className={inputCls} />
+          <input {...register("password")} type="password" placeholder="Mindestens 12 Zeichen" className={inputCls} />
         </Field>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input {...register("isSuperAdmin")} type="checkbox" className="rounded border-gray-300" />
-          <span className="text-sm text-gray-700">Super Admin</span>
-        </label>
+        <CheckboxLabel label="Super Admin">
+          <input {...register("isSuperAdmin")} type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+        </CheckboxLabel>
         <ModalActions onClose={onClose} isSubmitting={isSubmitting} submitLabel="Benutzer anlegen" />
       </form>
     </ModalWrapper>
@@ -148,18 +363,17 @@ function EditModal({ user, onClose, onSuccess }: { user: User; onClose: () => vo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      onSuccess();
-    } else {
+    if (res.ok) onSuccess();
+    else {
       const json = await res.json().catch(() => ({}));
       setServerError(json.error ?? "Fehler beim Speichern");
     }
   };
 
   return (
-    <ModalWrapper title={`Benutzer bearbeiten — ${user.name}`} onClose={onClose}>
+    <ModalWrapper title={`Benutzer bearbeiten - ${user.name}`} onClose={onClose}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {serverError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{serverError}</p>}
+        <ServerError message={serverError} />
         <Field label="Name" error={errors.name?.message}>
           <input {...register("name")} type="text" className={inputCls} />
         </Field>
@@ -167,17 +381,15 @@ function EditModal({ user, onClose, onSuccess }: { user: User; onClose: () => vo
           <input {...register("email")} type="email" className={inputCls} />
         </Field>
         <Field label="Neues Passwort (leer lassen = unverändert)" error={errors.password?.message}>
-          <input {...register("password")} type="password" placeholder="••••••••••••" className={inputCls} />
+          <input {...register("password")} type="password" placeholder="Optional" className={inputCls} />
         </Field>
-        <div className="flex gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input {...register("isActive")} type="checkbox" className="rounded border-gray-300" />
-            <span className="text-sm text-gray-700">Aktiv</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input {...register("isSuperAdmin")} type="checkbox" className="rounded border-gray-300" />
-            <span className="text-sm text-gray-700">Super Admin</span>
-          </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CheckboxLabel label="Aktiv">
+            <input {...register("isActive")} type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+          </CheckboxLabel>
+          <CheckboxLabel label="Super Admin">
+            <input {...register("isSuperAdmin")} type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+          </CheckboxLabel>
         </div>
         <ModalActions onClose={onClose} isSubmitting={isSubmitting} submitLabel="Speichern" />
       </form>
@@ -211,48 +423,56 @@ function RoleModal({
       body: JSON.stringify(data),
     });
     if (res.ok) {
-      reset();
+      reset({ role: "TECHNICIAN", tenantId: "" });
       onSuccess();
     } else {
       const json = await res.json().catch(() => ({}));
-      setServerError(json.error ?? "Fehler");
+      setServerError(json.error ?? "Fehler beim Speichern");
     }
   };
 
   const removeRole = async (tenantId: string) => {
     setRemoving(tenantId);
-    await fetch(`/api/users/${user.id}/roles?tenantId=${tenantId}`, { method: "DELETE" });
+    const res = await fetch(`/api/users/${user.id}/roles?tenantId=${tenantId}`, { method: "DELETE" });
     setRemoving(null);
-    onSuccess();
+    if (res.ok) onSuccess();
+    else {
+      const json = await res.json().catch(() => ({}));
+      setServerError(json.error ?? "Fehler beim Entfernen");
+    }
   };
 
-  const availableTenants = tenants.filter((t) => !user.tenantRoles.some((r) => r.tenant.id === t.id));
+  const availableTenants = tenants.filter((tenant) => !user.tenantRoles.some((role) => role.tenant.id === tenant.id));
 
   return (
-    <ModalWrapper title={`Rollen — ${user.name}`} onClose={onClose}>
-      <div className="space-y-4">
-        {/* Current roles */}
+    <ModalWrapper title={`Rollen - ${user.name}`} onClose={onClose} wide>
+      <div className="space-y-5">
+        <ServerError message={serverError} />
+
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Aktuelle Rollen</p>
+          <p className="mb-2 text-sm font-medium text-gray-700">Aktuelle Rollen</p>
           {user.tenantRoles.length === 0 ? (
-            <p className="text-sm text-gray-400">Keine Mandanten-Rollen</p>
+            <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">
+              Keine Mandanten-Rollen
+            </p>
           ) : (
             <ul className="space-y-2">
-              {user.tenantRoles.map((tr) => (
-                <li key={tr.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium mr-2 ${roleBadge[tr.role] ?? ""}`}>
-                      {roleLabel[tr.role] ?? tr.role}
-                    </span>
-                    <span className="text-sm text-gray-700">{tr.tenant.name}</span>
+              {user.tenantRoles.map((tenantRole) => (
+                <li
+                  key={tenantRole.id}
+                  className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <RolePill role={tenantRole.role} />
+                    <p className="mt-1 truncate text-sm font-medium text-gray-800">{tenantRole.tenant.name}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeRole(tr.tenant.id)}
-                    disabled={removing === tr.tenant.id}
-                    className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-40"
+                    onClick={() => removeRole(tenantRole.tenant.id)}
+                    disabled={removing === tenantRole.tenant.id}
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-200 bg-white px-3 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40"
                   >
-                    {removing === tr.tenant.id ? "..." : "Entfernen"}
+                    {removing === tenantRole.tenant.id ? "Entferne..." : "Entfernen"}
                   </button>
                 </li>
               ))}
@@ -260,28 +480,28 @@ function RoleModal({
           )}
         </div>
 
-        {/* Assign new role */}
         {availableTenants.length > 0 && (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 border-t border-gray-100 pt-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 border-t border-gray-100 pt-5">
             <p className="text-sm font-medium text-gray-700">Neue Rolle zuweisen</p>
-            {serverError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{serverError}</p>}
-            <Field label="Mandant" error={errors.tenantId?.message}>
-              <select {...register("tenantId")} className={inputCls}>
-                <option value="">Mandant wählen…</option>
-                {availableTenants.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Rolle" error={errors.role?.message}>
-              <select {...register("role")} className={inputCls}>
-                <option value="INTERNAL_ADMIN">Interner Admin</option>
-                <option value="TECHNICIAN">Techniker</option>
-                <option value="CUSTOMER_ADMIN">Kunden-Admin</option>
-                <option value="CUSTOMER_USER">Kunden-Benutzer</option>
-                <option value="READ_ONLY">Nur Lesen</option>
-              </select>
-            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Mandant" error={errors.tenantId?.message}>
+                <select {...register("tenantId")} className={inputCls}>
+                  <option value="">Mandant wählen...</option>
+                  {availableTenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Rolle" error={errors.role?.message}>
+                <select {...register("role")} className={inputCls}>
+                  <option value="INTERNAL_ADMIN">Interner Admin</option>
+                  <option value="TECHNICIAN">Techniker</option>
+                  <option value="CUSTOMER_ADMIN">Kunden-Admin</option>
+                  <option value="CUSTOMER_USER">Kunden-Benutzer</option>
+                  <option value="READ_ONLY">Nur Lesen</option>
+                </select>
+              </Field>
+            </div>
             <ModalActions onClose={onClose} isSubmitting={isSubmitting} submitLabel="Rolle zuweisen" />
           </form>
         )}
@@ -290,19 +510,134 @@ function RoleModal({
   );
 }
 
-function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-3 text-2xl font-bold text-gray-950">{value}</p>
+    </div>
+  );
+}
+
+function UserCard({ user, onEdit, onRoles }: { user: User; onEdit: () => void; onRoles: () => void }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <UserIdentity user={user} />
+        <StatusBadge user={user} />
+      </div>
+      <div className="mt-3">
+        <RoleBadges user={user} />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+        <span>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Noch nie angemeldet"}</span>
+        {user.twoFactorEnabled ? <span className="font-medium text-emerald-700">2FA aktiv</span> : null}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button onClick={onRoles} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">
+          <KeyRound className="h-4 w-4" />
+          Rollen
+        </button>
+        <button onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">
+          <Pencil className="h-4 w-4" />
+          Bearbeiten
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UserIdentity({ user }: { user: User }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm font-bold text-gray-600">
+        {initials(user.name)}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate font-medium text-gray-950">{user.name}</p>
+        <p className="truncate text-xs text-gray-500">{user.email}</p>
+      </div>
+    </div>
+  );
+}
+
+function RoleBadges({ user }: { user: User }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {user.isSuperAdmin ? <RolePill role="SUPER_ADMIN" /> : null}
+      {user.tenantRoles.map((tenantRole) => (
+        <RolePill key={tenantRole.id} role={tenantRole.role} suffix={tenantRole.tenant.name} />
+      ))}
+      {!user.isSuperAdmin && user.tenantRoles.length === 0 ? (
+        <span className="text-xs text-gray-400">Keine Rollen</span>
+      ) : null}
+    </div>
+  );
+}
+
+function RolePill({ role, suffix }: { role: string; suffix?: string }) {
+  return (
+    <span className={`inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadge[role] ?? "border-gray-200 bg-gray-50 text-gray-600"}`}>
+      <span className="truncate">{roleLabel[role] ?? role}{suffix ? ` @ ${suffix}` : ""}</span>
+    </span>
+  );
+}
+
+function StatusBadge({ user }: { user: User }) {
+  if (isLocked(user)) {
+    return <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700"><Lock className="h-3.5 w-3.5" />Gesperrt</span>;
+  }
+  if (user.isActive) {
+    return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Aktiv</span>;
+  }
+  return <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"><CircleOff className="h-3.5 w-3.5" />Inaktiv</span>;
+}
+
+function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ModalWrapper({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+      <div className={`max-h-[90vh] w-full overflow-hidden rounded-lg bg-white shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-gray-100 bg-white px-5 py-4">
+          <h2 className="min-w-0 truncate text-lg font-semibold text-gray-950">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Schließen"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="max-h-[calc(90vh-4.5rem)] overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );
@@ -310,22 +645,12 @@ function ModalWrapper({ title, onClose, children }: { title: string; onClose: ()
 
 function ModalActions({ onClose, isSubmitting, submitLabel }: { onClose: () => void; isSubmitting: boolean; submitLabel: string }) {
   return (
-    <div className="flex justify-end gap-3 pt-2">
-      <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+      <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
         Abbrechen
       </button>
-      <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center gap-2">
-        {isSubmitting ? (
-          <>
-            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Speichern...
-          </>
-        ) : (
-          submitLabel
-        )}
+      <button type="submit" disabled={isSubmitting} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-blue-400">
+        {isSubmitting ? "Speichern..." : submitLabel}
       </button>
     </div>
   );
@@ -334,175 +659,37 @@ function ModalActions({ onClose, isSubmitting, submitLabel }: { onClose: () => v
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
       {children}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }
 
-const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
-
-export function UserManagement({ users, tenants }: { users: User[]; tenants: Tenant[] }) {
-  const router = useRouter();
-  const [modal, setModal] = useState<
-    "create" | { type: "edit"; user: User } | { type: "roles"; user: User } | null
-  >(null);
-
-  const refresh = () => {
-    setModal(null);
-    router.refresh();
-  };
-
+function CheckboxLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <>
-      {modal === "create" && <CreateModal onClose={() => setModal(null)} onSuccess={refresh} />}
-      {modal !== null && modal !== "create" && modal.type === "edit" && (
-        <EditModal user={modal.user} onClose={() => setModal(null)} onSuccess={refresh} />
-      )}
-      {modal !== null && modal !== "create" && modal.type === "roles" && (
-        <RoleModal user={modal.user} tenants={tenants} onClose={() => setModal(null)} onSuccess={refresh} />
-      )}
-
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Benutzer & Rechte</h1>
-          <p className="text-gray-500 mt-1">{users.length} Benutzer</p>
-        </div>
-        <button
-          onClick={() => setModal("create")}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Neuer Benutzer
-        </button>
-      </div>
-
-      {/* Mobile: Cards */}
-      <div className="block lg:hidden space-y-3">
-        {users.map((u) => (
-          <div key={u.id} className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-medium text-gray-900">{u.name}</p>
-                <p className="text-xs text-gray-400">{u.email}</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => setModal({ type: "roles", user: u })} className="text-green-600 hover:text-green-800 text-xs font-medium">
-                  Rollen
-                </button>
-                <button onClick={() => setModal({ type: "edit", user: u })} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
-                  Bearbeiten
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1 mt-2">
-              {u.isSuperAdmin && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge.SUPER_ADMIN}`}>
-                  Super Admin
-                </span>
-              )}
-              {u.tenantRoles.map((tr) => (
-                <span key={tr.id} className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge[tr.role] ?? ""}`}>
-                  {roleLabel[tr.role] ?? tr.role} @ {tr.tenant.name}
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-3 mt-2 text-xs text-gray-400">
-              <span>
-                {u.lockedUntil && new Date(u.lockedUntil) > new Date()
-                  ? "🔒 Gesperrt"
-                  : u.isActive
-                  ? "✓ Aktiv"
-                  : "○ Inaktiv"}
-              </span>
-              {u.twoFactorEnabled && <span>2FA aktiv</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Desktop: Table */}
-      <div className="hidden lg:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Benutzer</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Rollen / Mandanten</th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-700">2FA</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Letzter Login</th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {users.map((u) => (
-              <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3">
-                  <div>
-                    <p className="font-medium text-gray-900">{u.name}</p>
-                    <p className="text-xs text-gray-400">{u.email}</p>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {u.isSuperAdmin && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge.SUPER_ADMIN}`}>
-                        Super Admin
-                      </span>
-                    )}
-                    {u.tenantRoles.map((tr) => (
-                      <span key={tr.id} className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadge[tr.role] ?? ""}`}>
-                        {roleLabel[tr.role] ?? tr.role} @ {tr.tenant.name}
-                      </span>
-                    ))}
-                    {!u.isSuperAdmin && u.tenantRoles.length === 0 && (
-                      <span className="text-xs text-gray-400">Keine Rollen</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {u.twoFactorEnabled ? (
-                    <span className="text-green-600 text-xs font-medium">Aktiv</span>
-                  ) : (
-                    <span className="text-gray-300 text-xs">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-400">
-                  {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "Noch nie"}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {u.lockedUntil && new Date(u.lockedUntil) > new Date() ? (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Gesperrt</span>
-                  ) : u.isActive ? (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Aktiv</span>
-                  ) : (
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Inaktiv</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => setModal({ type: "roles", user: u })}
-                      className="text-green-600 hover:text-green-800 text-xs font-medium"
-                    >
-                      Rollen
-                    </button>
-                    <button
-                      onClick={() => setModal({ type: "edit", user: u })}
-                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                    >
-                      Bearbeiten
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+    <label className="flex min-h-10 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+      {children}
+      {label}
+    </label>
   );
+}
+
+function ServerError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</p>;
+}
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "?";
+}
+
+function isLocked(user: User) {
+  return Boolean(user.lockedUntil && new Date(user.lockedUntil) > new Date());
 }

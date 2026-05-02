@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
-import { Prisma, Role } from "@prisma/client";
+import { Prisma, Role, AuditAction } from "@prisma/client";
 import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Audit-Log" };
@@ -115,12 +115,19 @@ export default async function AuditLogPage({
 
   const where: Prisma.AuditLogWhereInput = {
     ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
-    ...(sp.action ? { action: sp.action as "LOGIN" } : {}),
-    ...(sp.userId ? { userId: sp.userId } : {}),
+    ...(sp.action ? { action: sp.action as AuditAction } : {}),
+    ...(sp.userId
+      ? {
+          OR: [
+            { userId: sp.userId },
+            { userEmail: { contains: sp.userId, mode: "insensitive" } },
+          ],
+        }
+      : {}),
     ...(sp.dateFrom || sp.dateTo
       ? {
           createdAt: {
-            ...(sp.dateFrom ? { gte: new Date(sp.dateFrom) } : {}),
+            ...(sp.dateFrom ? { gte: new Date(sp.dateFrom + "T00:00:00.000Z") } : {}),
             ...(sp.dateTo ? { lte: new Date(sp.dateTo + "T23:59:59.999Z") } : {}),
           },
         }
@@ -180,12 +187,12 @@ export default async function AuditLogPage({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">Benutzer (ID oder E-Mail-Suche)</label>
+          <label className="text-xs font-medium text-gray-600">Benutzer (ID oder E-Mail)</label>
           <input
             type="text"
             name="userId"
             defaultValue={sp.userId ?? ""}
-            placeholder="User-ID"
+            placeholder="User-ID oder E-Mail"
             className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-52 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -266,7 +273,7 @@ export default async function AuditLogPage({
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[200px]">
                   {log.resource
-                    ? `${log.resource}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ""}`
+                    ? `${log.resource}${log.resourceId ? ` #${log.resourceId.substring(0, 8)}` : ""}`
                     : "—"}
                 </td>
                 <td className="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">

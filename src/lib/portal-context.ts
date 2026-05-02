@@ -10,11 +10,11 @@ export interface PortalContext {
   userName: string;
   userEmail: string;
   isCustomerAdmin: boolean;
+  roleLabel: "Mitarbeiter" | "Management";
 }
 
 /**
- * Resolves the portal context for a customer user.
- * Returns null if the user has no tenant assignment or is not a customer role.
+ * Portal: CUSTOMER_USER (Mitarbeiter) und CUSTOMER_ADMIN (Management).
  */
 export async function getPortalContext(): Promise<PortalContext | null> {
   const session = await auth();
@@ -25,7 +25,7 @@ export async function getPortalContext(): Promise<PortalContext | null> {
   const userRole = await prisma.userTenantRole.findFirst({
     where: {
       userId,
-      role: { in: [Role.CUSTOMER_ADMIN, Role.CUSTOMER_USER] },
+      role: { in: [Role.CUSTOMER_USER, Role.CUSTOMER_ADMIN] },
       tenant: { isActive: true, deletedAt: null },
     },
     include: {
@@ -44,5 +44,6 @@ export async function getPortalContext(): Promise<PortalContext | null> {
     userName: userName ?? userEmail,
     userEmail,
     isCustomerAdmin: userRole.role === Role.CUSTOMER_ADMIN,
+    roleLabel: userRole.role === Role.CUSTOMER_ADMIN ? "Management" : "Mitarbeiter",
   };
 }
