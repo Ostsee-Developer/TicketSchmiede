@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { getLoginPolicy, passwordLoginAllowed } from "@/lib/security-settings";
 
 const schema = z.object({
   email: z.string().email(),
@@ -18,6 +19,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = parsed.data;
+    const policy = await getLoginPolicy();
+    if (!passwordLoginAllowed(policy)) {
+      return NextResponse.json({ error: "Passwort-Anmeldung ist deaktiviert" }, { status: 403 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
       select: {

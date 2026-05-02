@@ -1,8 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Shield, ShieldCheck, ShieldOff, Copy, CheckCheck, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import {
+  AlertTriangle,
+  CheckCheck,
+  Copy,
+  KeyRound,
+  Plus,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Trash2,
+} from "lucide-react";
+import { decodeCreationOptions, encodeRegistrationCredential } from "@/lib/browser-webauthn";
 
 interface SetupData {
   secret: string;
@@ -11,12 +22,28 @@ interface SetupData {
   alreadyEnabled: boolean;
 }
 
+interface Passkey {
+  id: string;
+  name: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+type LoginPolicy = "PASSWORD_AND_PASSKEY" | "PASSWORD_ONLY" | "PASSKEY_ONLY";
 type Step = "overview" | "setup" | "backup" | "done" | "disable";
+
+const policyLabels: Record<LoginPolicy, string> = {
+  PASSWORD_AND_PASSKEY: "Passwort und Passkey",
+  PASSWORD_ONLY: "Nur Passwort",
+  PASSKEY_ONLY: "Nur Passkey",
+};
 
 export default function SecuritySettingsPage() {
   const [step, setStep] = useState<Step>("overview");
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
+  const [passkeys, setPasskeys] = useState<Passkey[]>([]);
+  const [loginPolicy, setLoginPolicy] = useState<LoginPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
@@ -25,25 +52,34 @@ export default function SecuritySettingsPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/2fa/setup")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) {
-          setSetupData(d.data);
-          setTwoFaEnabled(d.data.alreadyEnabled);
-        }
-      })
-      .finally(() => setLoading(false));
+    Promise.all([load2Fa(), loadPasskeys(), loadLoginPolicy()]).finally(() => setLoading(false));
   }, []);
+
+  const load2Fa = async () => {
+    const payload = await fetch("/api/auth/2fa/setup").then((response) => response.json());
+    if (payload.success) {
+      setSetupData(payload.data);
+      setTwoFaEnabled(payload.data.alreadyEnabled);
+    }
+  };
+
+  const loadPasskeys = async () => {
+    const payload = await fetch("/api/auth/passkey/list").then((response) => response.json());
+    if (payload.success) setPasskeys(payload.data);
+  };
+
+  const loadLoginPolicy = async () => {
+    const response = await fetch("/api/settings/login-policy");
+    if (response.status === 403 || response.status === 401) return;
+    const payload = await response.json();
+    if (payload.success) setLoginPolicy(payload.data.policy);
+  };
 
   const startSetup = async () => {
     setError(null);
     setLoading(true);
-    const res = await fetch("/api/auth/2fa/setup").then((r) => r.json());
-    if (res.success) {
-      setSetupData(res.data);
-      setStep("setup");
-    }
+    await load2Fa();
+    setStep("setup");
     setLoading(false);
   };
 
@@ -54,12 +90,8 @@ export default function SecuritySettingsPage() {
     const res = await fetch("/api/auth/2fa/enable", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        secret: setupData.secret,
-        token,
-        backupCodes: setupData.backupCodes,
-      }),
-    }).then((r) => r.json());
+      body: JSON.stringify({ secret: setupData.secret, token, backupCodes: setupData.backupCodes }),
+    }).then((response) => response.json());
 
     if (res.success) {
       setStep("backup");
@@ -77,7 +109,7 @@ export default function SecuritySettingsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password, token }),
-    }).then((r) => r.json());
+    }).then((response) => response.json());
 
     if (res.success) {
       setTwoFaEnabled(false);
@@ -97,6 +129,59 @@ export default function SecuritySettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const registerPasskey = async () => {
+    if (!window.PublicKeyCredential) {
+      setError("Dieser Browser unterstützt Passkeys nicht.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const optionsPayload = await fetch("/api/auth/passkey/register-options", { method: "POST" }).then((response) =>
+        response.json()
+      );
+      if (!optionsPayload.success) throw new Error(optionsPayload.error ?? "Passkey konnte nicht vorbereitet werden.");
+
+      const credential = await navigator.credentials.create({
+        publicKey: decodeCreationOptions(optionsPayload.data.options),
+      });
+      if (!credential) throw new Error("Passkey-Registrierung wurde abgebrochen.");
+
+      const registerPayload = await fetch("/api/auth/passkey/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Passkey",
+          credential: encodeRegistrationCredential(credential as PublicKeyCredential),
+        }),
+      }).then((response) => response.json());
+
+      if (!registerPayload.success) throw new Error(registerPayload.error ?? "Passkey konnte nicht gespeichert werden.");
+      await loadPasskeys();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Passkey-Registrierung fehlgeschlagen.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deletePasskey = async (id: string) => {
+    await fetch(`/api/auth/passkey/${id}`, { method: "DELETE" });
+    setPasskeys((items) => items.filter((item) => item.id !== id));
+  };
+
+  const updatePolicy = async (policy: LoginPolicy) => {
+    setSubmitting(true);
+    const payload = await fetch("/api/settings/login-policy", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ policy }),
+    }).then((response) => response.json());
+    if (payload.success) setLoginPolicy(payload.data.policy);
+    setSubmitting(false);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -106,87 +191,127 @@ export default function SecuritySettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Sicherheitseinstellungen</h1>
-        <p className="text-gray-500 mt-1">Verwalte deine Kontosicherheit und Zwei-Faktor-Authentifizierung.</p>
+        <p className="text-gray-500 mt-1">Verwalte 2FA, Passkeys und erlaubte Login-Methoden.</p>
       </div>
 
-      {/* Overview */}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
       {step === "overview" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-start gap-4">
-            <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${twoFaEnabled ? "bg-green-100" : "bg-gray-100"}`}>
-              {twoFaEnabled
-                ? <ShieldCheck className="w-6 h-6 text-green-600" />
-                : <ShieldOff className="w-6 h-6 text-gray-400" />}
-            </div>
-            <div className="flex-1">
-              <h2 className="font-semibold text-gray-900">Zwei-Faktor-Authentifizierung (2FA)</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                {twoFaEnabled
-                  ? "2FA ist aktiviert. Dein Konto ist zusätzlich geschützt."
-                  : "2FA ist deaktiviert. Aktiviere es für mehr Sicherheit."}
-              </p>
-              <div className="flex gap-3 mt-4">
-                {twoFaEnabled ? (
-                  <button
-                    onClick={() => { setStep("disable"); setError(null); setToken(""); setPassword(""); }}
-                    className="text-sm text-red-600 hover:text-red-800 font-medium"
-                  >
-                    2FA deaktivieren
-                  </button>
-                ) : (
-                  <button
-                    onClick={startSetup}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                  >
-                    2FA einrichten
-                  </button>
-                )}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start gap-4">
+              <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${twoFaEnabled ? "bg-green-100" : "bg-gray-100"}`}>
+                {twoFaEnabled ? <ShieldCheck className="w-6 h-6 text-green-600" /> : <ShieldOff className="w-6 h-6 text-gray-400" />}
+              </div>
+              <div className="flex-1">
+                <h2 className="font-semibold text-gray-900">Zwei-Faktor-Authentifizierung</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {twoFaEnabled ? "2FA ist aktiviert." : "2FA ist deaktiviert. Aktiviere es für mehr Kontosicherheit."}
+                </p>
+                <div className="mt-4">
+                  {twoFaEnabled ? (
+                    <button onClick={() => setStep("disable")} className="text-sm text-red-600 hover:text-red-800 font-medium">
+                      2FA deaktivieren
+                    </button>
+                  ) : (
+                    <button onClick={startSetup} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                      2FA einrichten
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${twoFaEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-              {twoFaEnabled ? "Aktiv" : "Inaktiv"}
-            </span>
-          </div>
+          </section>
+
+          <section className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100">
+                <KeyRound className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-semibold text-gray-900">Passkeys</h2>
+                <p className="text-sm text-gray-500 mt-1">Melde dich ohne Passwort mit Geräte-PIN, Fingerabdruck oder Sicherheitsschlüssel an.</p>
+                <button
+                  onClick={registerPasskey}
+                  disabled={submitting}
+                  className="mt-4 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-lg"
+                >
+                  <Plus className="w-4 h-4" />
+                  Passkey hinzufügen
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              {passkeys.length === 0 ? (
+                <p className="text-sm text-gray-500">Noch kein Passkey eingerichtet.</p>
+              ) : (
+                passkeys.map((passkey) => (
+                  <div key={passkey.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{passkey.name ?? "Passkey"}</p>
+                      <p className="text-xs text-gray-500">
+                        Erstellt am {new Date(passkey.createdAt).toLocaleDateString("de-DE")}
+                      </p>
+                    </div>
+                    <button onClick={() => deletePasskey(passkey.id)} className="p-2 text-gray-400 hover:text-red-600" title="Passkey löschen">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          {loginPolicy && (
+            <section className="bg-white rounded-xl border border-gray-200 p-6 lg:col-span-2">
+              <h2 className="font-semibold text-gray-900">Erlaubte Login-Methoden</h2>
+              <p className="text-sm text-gray-500 mt-1">Diese Einstellung gilt systemweit für alle Benutzer.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {(Object.keys(policyLabels) as LoginPolicy[]).map((policy) => (
+                  <button
+                    key={policy}
+                    onClick={() => updatePolicy(policy)}
+                    disabled={submitting}
+                    className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+                      loginPolicy === policy
+                        ? "border-blue-600 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {policyLabels[policy]}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
-      {/* Step 1: Show QR code */}
       {step === "setup" && setupData && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 max-w-2xl">
           <div className="flex items-center gap-3">
             <Shield className="w-6 h-6 text-blue-600" />
-            <h2 className="font-semibold text-gray-900">Schritt 1: QR-Code scannen</h2>
+            <h2 className="font-semibold text-gray-900">QR-Code scannen</h2>
           </div>
-          <p className="text-sm text-gray-600">
-            Scanne den QR-Code mit deiner Authenticator-App (z. B. Google Authenticator, Authy oder 1Password).
-          </p>
           <div className="flex justify-center">
             <div className="p-3 border border-gray-200 rounded-xl bg-white">
               <Image src={setupData.qrDataUrl} alt="2FA QR Code" width={180} height={180} />
             </div>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 mb-1 font-medium">Manueller Code (falls QR nicht lesbar):</p>
-            <code className="text-sm font-mono text-gray-800 break-all">{setupData.secret}</code>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Bestätigungscode (6 Ziffern)
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={token}
-              onChange={(e) => setToken(e.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
-          </div>
+          <code className="block bg-gray-50 rounded-lg p-3 text-sm font-mono text-gray-800 break-all">{setupData.secret}</code>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={token}
+            onChange={(event) => setToken(event.target.value.replace(/\D/g, ""))}
+            placeholder="000000"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <div className="flex gap-3">
             <button onClick={() => setStep("overview")} className="text-sm text-gray-500 hover:text-gray-700">
               Abbrechen
@@ -194,32 +319,24 @@ export default function SecuritySettingsPage() {
             <button
               onClick={confirmToken}
               disabled={token.length !== 6 || submitting}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium py-2 rounded-lg"
             >
-              {submitting ? "Prüfen…" : "Bestätigen"}
+              {submitting ? "Prüfen..." : "Bestätigen"}
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 2: Backup codes */}
       {step === "backup" && setupData && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 max-w-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-              <CheckCheck className="w-4 h-4 text-white" />
-            </div>
-            <h2 className="font-semibold text-gray-900">Schritt 2: Backup-Codes sichern</h2>
+            <CheckCheck className="w-6 h-6 text-green-600" />
+            <h2 className="font-semibold text-gray-900">Backup-Codes sichern</h2>
           </div>
-
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-yellow-800">
-              Speichere diese Codes sicher. Jeder Code kann nur <strong>einmal</strong> verwendet werden,
-              falls du keinen Zugriff auf deine Authenticator-App hast.
-            </p>
+            <p className="text-sm text-yellow-800">Speichere diese Codes sicher. Jeder Code kann nur einmal verwendet werden.</p>
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             {setupData.backupCodes.map((code) => (
               <code key={code} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-center text-gray-800">
@@ -227,91 +344,58 @@ export default function SecuritySettingsPage() {
               </code>
             ))}
           </div>
-
-          <button
-            onClick={copyBackupCodes}
-            className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+          <button onClick={copyBackupCodes} className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50">
             {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-            {copied ? "Kopiert!" : "Alle Codes kopieren"}
+            {copied ? "Kopiert" : "Alle Codes kopieren"}
           </button>
-
-          <button
-            onClick={() => { setTwoFaEnabled(true); setStep("done"); }}
-            className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
-          >
-            Codes gespeichert — Abschließen
+          <button onClick={() => { setTwoFaEnabled(true); setStep("done"); }} className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-lg">
+            Codes gespeichert
           </button>
         </div>
       )}
 
-      {/* Done */}
       {step === "done" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mx-auto">
-            <ShieldCheck className="w-7 h-7 text-green-600" />
-          </div>
-          <div>
-            <h2 className="font-bold text-gray-900 text-lg">2FA erfolgreich aktiviert!</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Dein Konto ist jetzt mit Zwei-Faktor-Authentifizierung geschützt.
-            </p>
-          </div>
-          <button
-            onClick={() => setStep("overview")}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors"
-          >
+        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center space-y-4 max-w-2xl">
+          <ShieldCheck className="w-10 h-10 text-green-600 mx-auto" />
+          <h2 className="font-bold text-gray-900 text-lg">2FA erfolgreich aktiviert</h2>
+          <button onClick={() => setStep("overview")} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-6 py-2 rounded-lg">
             Zur Übersicht
           </button>
         </div>
       )}
 
-      {/* Disable 2FA */}
       {step === "disable" && (
-        <div className="bg-white rounded-xl border border-red-200 p-6 space-y-5">
+        <div className="bg-white rounded-xl border border-red-200 p-6 space-y-5 max-w-2xl">
           <div className="flex items-center gap-3">
             <ShieldOff className="w-6 h-6 text-red-500" />
             <h2 className="font-semibold text-gray-900">2FA deaktivieren</h2>
           </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-700">
-              Das Deaktivieren von 2FA macht dein Konto weniger sicher. Bitte bestätige mit deinem Passwort und einem Authentifizierungscode.
-            </p>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Aktuelles Passwort</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Authenticator-Code</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={token}
-                onChange={(e) => setToken(e.target.value.replace(/\D/g, ""))}
-                placeholder="000000"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </div>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Aktuelles Passwort"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={token}
+            onChange={(event) => setToken(event.target.value.replace(/\D/g, ""))}
+            placeholder="000000"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <div className="flex gap-3">
-            <button onClick={() => setStep("overview")} className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <button onClick={() => setStep("overview")} className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50">
               Abbrechen
             </button>
             <button
               onClick={disable2FA}
               disabled={!password || token.length !== 6 || submitting}
-              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-medium py-2 rounded-lg"
             >
-              {submitting ? "Deaktivieren…" : "2FA deaktivieren"}
+              {submitting ? "Deaktivieren..." : "2FA deaktivieren"}
             </button>
           </div>
         </div>

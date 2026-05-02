@@ -14,10 +14,24 @@ interface AuditOptions {
 }
 
 export async function createAuditLog(options: AuditOptions): Promise<void> {
+  let userEmail = options.userEmail ?? null;
+
+  if (!userEmail && options.userId) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: options.userId },
+        select: { email: true },
+      });
+      userEmail = user?.email ?? null;
+    } catch (_error) {
+      // Audit logging must stay best-effort.
+    }
+  }
+
   const data = {
     tenantId: options.tenantId ?? null,
     userId: options.userId ?? null,
-    userEmail: options.userEmail ?? null,
+    userEmail,
     action: options.action,
     resource: options.resource ?? null,
     resourceId: options.resourceId ?? null,
@@ -52,11 +66,47 @@ export function getClientInfo(request: Request): {
   ipAddress: string | null;
   userAgent: string | null;
 } {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-  const ipAddress = forwarded?.split(",")[0]?.trim() ?? realIp ?? null;
+  const ipAddress = getForwardedIp(request.headers);
   const userAgent = request.headers.get("user-agent") ?? null;
   return { ipAddress, userAgent };
+}
+
+function getForwardedIp(headers: Headers): string | null {
+  const candidates = [
+    headers.get("cf-connecting-ip"),
+    headers.get("x-real-ip"),
+    headers.get("x-vercel-forwarded-for"),
+    headers.get("x-forwarded-for"),
+    headers.get("forwarded"),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    const value = candidate
+      .split(",")
+      .map((part) => part.trim())
+      .find(Boolean);
+    const normalized = normalizeIp(value ?? null);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function normalizeIp(value: string | null): string | null {
+  if (!value) return null;
+
+  let ip = value;
+  const forwardedFor = /for="?([^";,]+)"?/i.exec(ip);
+  if (forwardedFor?.[1]) ip = forwardedFor[1];
+
+  ip = ip.trim().replace(/^::ffff:/i, "");
+  if (ip.startsWith("[") && ip.includes("]")) {
+    ip = ip.slice(1, ip.indexOf("]"));
+  } else if (/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(ip)) {
+    ip = ip.slice(0, ip.lastIndexOf(":"));
+  }
+
+  return ip || null;
 }
 
 export function diffObjects(

@@ -121,6 +121,8 @@ enum AuditAction {
   LOGIN
   LOGOUT
   LOGIN_FAILED
+  PASSKEY_REGISTER
+  PASSKEY_LOGIN
   CREATE
   UPDATE
   DELETE
@@ -224,6 +226,7 @@ model User {
   updatedAt        DateTime  @updatedAt
 
   tenantRoles     UserTenantRole[]
+  passkeys        PasskeyCredential[]
   auditLogs       AuditLog[]
   assignedTickets Ticket[]         @relation("AssignedTechnician")
   createdTickets  Ticket[]         @relation("TicketCreator")
@@ -231,6 +234,42 @@ model User {
 
   @@index([email])
   @@index([isActive])
+}
+
+model PasskeyCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    String
+  counter      Int       @default(0)
+  transports   String?
+  name         String?
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  challenge String   @unique
+  userId    String?
+  type      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([challenge])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 // ============================================================
