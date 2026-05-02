@@ -267,6 +267,7 @@ async function copyUploadedFiles(workDir: string) {
     process.env.UPLOAD_DIR,
     process.env.FILE_STORAGE_PATH,
     "uploads",
+    "/app/uploads",
     "public/uploads",
     "storage",
   ].filter(Boolean) as string[];

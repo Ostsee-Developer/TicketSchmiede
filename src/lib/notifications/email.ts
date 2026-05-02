@@ -1,4 +1,5 @@
 import type { NotificationPayload } from "./types";
+import { getSmtpRuntimeConfig } from "@/lib/system-settings";
 
 interface SmtpConfig {
   host: string;
@@ -8,7 +9,10 @@ interface SmtpConfig {
   from: string;
 }
 
-function getSmtpConfig(): SmtpConfig | null {
+async function getSmtpConfig(): Promise<SmtpConfig | null> {
+  const stored = await getSmtpRuntimeConfig();
+  if (stored) return stored;
+
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASSWORD;
@@ -106,7 +110,7 @@ export async function sendEmailNotification(
   payload: NotificationPayload,
   recipients: string[]
 ): Promise<void> {
-  const config = getSmtpConfig();
+  const config = await getSmtpConfig();
   if (!config || recipients.length === 0) return;
 
   const { subject, html } = buildEmailHtml(payload);
@@ -129,4 +133,35 @@ export async function sendEmailNotification(
   } catch (error) {
     console.error("[Email] Failed to send notification email:", error);
   }
+}
+
+export async function sendPlainEmail({
+  to,
+  subject,
+  html,
+  text,
+}: {
+  to: string | string[];
+  subject: string;
+  html?: string;
+  text?: string;
+}) {
+  const config = await getSmtpConfig();
+  if (!config) throw new Error("SMTP ist nicht konfiguriert.");
+
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
+  });
+
+  await transporter.sendMail({
+    from: config.from,
+    to: Array.isArray(to) ? to.join(", ") : to,
+    subject,
+    html,
+    text,
+  });
 }

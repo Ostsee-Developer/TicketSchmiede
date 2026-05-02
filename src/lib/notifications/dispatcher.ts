@@ -11,7 +11,9 @@ export async function dispatchNotification(payload: NotificationPayload): Promis
     (c) => c.enabled && c.events.includes(payload.event)
   );
 
-  const emailRecipients = getEmailRecipients(payload.event);
+  const emailRecipients = Array.from(
+    new Set([...(payload.recipients ?? []), ...getEmailRecipients(payload.event)])
+  );
 
   await Promise.allSettled([
     ...relevant.map((config) => sendToWebhook(config, payload)),
@@ -136,7 +138,7 @@ function formatEventDescription(payload: NotificationPayload): string {
     case "ticket.closed":
       return `Ticket #${d.number}: ${d.title}\nPriorität: ${d.priority} | Status: ${d.status}`;
     case "ticket.comment":
-      return `Kommentar zu Ticket #${d.number}: ${d.title}`;
+      return `Kommentar zu Ticket #${d.number}: ${d.title}${d.authorName ? `\nVon: ${d.authorName}` : ""}`;
     case "device.warranty_expiring":
       return `${d.manufacturer} ${d.model}\nGarantie läuft ab in ${d.daysLeft} Tagen`;
     case "software.license_expiring":

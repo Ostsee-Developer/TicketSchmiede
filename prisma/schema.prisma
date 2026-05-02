@@ -228,6 +228,7 @@ model User {
 
   tenantRoles     UserTenantRole[]
   passkeys        PasskeyCredential[]
+  setupTokens     AccountSetupToken[]
   auditLogs       AuditLog[]
   assignedTickets Ticket[]         @relation("AssignedTechnician")
   createdTickets  Ticket[]         @relation("TicketCreator")
@@ -235,6 +236,20 @@ model User {
 
   @@index([email])
   @@index([isActive])
+}
+
+model AccountSetupToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PasskeyCredential {

@@ -133,6 +133,29 @@ export function SystemSettingsClient({
     }
   };
 
+  const testSmtp = async () => {
+    const to = smtp.from || smtp.user;
+    if (!to) {
+      setError("Bitte zuerst Absender oder Benutzer als Testempfänger eintragen.");
+      return;
+    }
+    setSaving("smtp-test");
+    setError(null);
+    setMessage(null);
+    const response = await fetch("/api/admin/smtp-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSaving(null);
+    if (response.ok && payload.success) {
+      setMessage(`SMTP-Testmail wurde an ${to} gesendet.`);
+    } else {
+      setError(payload.error ?? "SMTP-Test fehlgeschlagen.");
+    }
+  };
+
   const savePolicy = async (nextPolicy: LoginPolicy) => {
     setSaving("policy");
     setError(null);
@@ -213,6 +236,15 @@ export function SystemSettingsClient({
           >
             <Save className="h-4 w-4" />
             {saving === "smtp" ? "Speichern..." : "SMTP speichern"}
+          </button>
+          <button
+            type="button"
+            onClick={testSmtp}
+            disabled={saving !== null}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <Mail className="h-4 w-4" />
+            {saving === "smtp-test" ? "Teste..." : "Testmail"}
           </button>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">

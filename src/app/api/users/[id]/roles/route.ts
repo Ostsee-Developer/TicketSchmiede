@@ -54,11 +54,12 @@ export async function POST(
 
     const { ipAddress, userAgent } = getClientInfo(request);
 
-    const role = await prisma.userTenantRole.upsert({
-      where: { userId_tenantId: { userId: id, tenantId: parsed.data.tenantId } },
-      update: { role: parsed.data.role },
-      create: { userId: id, tenantId: parsed.data.tenantId, role: parsed.data.role },
-      include: { tenant: { select: { id: true, name: true } } },
+    const role = await prisma.$transaction(async (tx) => {
+      await tx.userTenantRole.deleteMany({ where: { userId: id } });
+      return tx.userTenantRole.create({
+        data: { userId: id, tenantId: parsed.data.tenantId, role: parsed.data.role },
+        include: { tenant: { select: { id: true, name: true } } },
+      });
     });
 
     await createAuditLog({

@@ -7,6 +7,7 @@ import { can } from "@/lib/permissions";
 import { ok, created, unauthorized, forbidden, serverError, handleZodError, getPagination } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { getTicketCreatedRecipients } from "@/lib/ticket-notifications";
 
 const createTicketSchema = z.object({
   tenantId: z.string().cuid(),
@@ -133,12 +134,18 @@ export async function POST(request: NextRequest) {
       userAgent,
     });
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { name: true } });
+    const [tenant, recipients] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { name: true } }),
+      getTicketCreatedRecipients(ctx.tenantId, ctx.userId),
+    ]);
     dispatchNotification({
       event: "ticket.created",
       tenantId: ctx.tenantId,
       tenantName: tenant?.name,
+      recipients,
       data: {
+        id: ticket.id,
+        tenantId: ctx.tenantId,
         number: ticket.number,
         title: ticket.title,
         priority: ticket.priority,

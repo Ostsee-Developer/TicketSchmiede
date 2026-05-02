@@ -2,6 +2,7 @@
 
 import { Menu, Bell, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface TopbarProps {
   onMenuClick: () => void;
@@ -47,6 +48,25 @@ function usePageTitle() {
 
 export function Topbar({ onMenuClick, onSearchClick }: TopbarProps) {
   const title = usePageTitle();
+  const [openTickets, setOpenTickets] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/notifications")
+        .then((response) => response.json())
+        .then((payload) => {
+          if (!cancelled && payload?.success) setOpenTickets(payload.data.openTickets ?? 0);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const interval = window.setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-topbar-border bg-topbar px-4 lg:hidden">
@@ -73,9 +93,14 @@ export function Topbar({ onMenuClick, onSearchClick }: TopbarProps) {
         </button>
         <button
           className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors relative"
-          aria-label="Benachrichtigungen"
+          aria-label={`${openTickets} offene Benachrichtigungen`}
         >
           <Bell className="w-4 h-4" />
+          {openTickets > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+              {openTickets > 9 ? "9+" : openTickets}
+            </span>
+          )}
         </button>
       </div>
     </header>

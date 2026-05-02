@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
     const extension = ALLOWED_TYPES[file.type];
     if (!extension) return badRequest("Bitte JPG, PNG oder WebP verwenden.");
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
+    const uploadRoot = process.env.UPLOAD_DIR
+      ? path.resolve(process.env.UPLOAD_DIR)
+      : path.join(process.cwd(), "uploads");
+    const uploadDir = path.join(uploadRoot, "avatars");
     await mkdir(uploadDir, { recursive: true });
 
     const fileName = `${session.user.id}-${Date.now()}.${extension}`;
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
-    const avatarUrl = `/uploads/avatars/${fileName}`;
+    const avatarUrl = `/api/uploads/avatars/${fileName}`;
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data: { avatarUrl },

@@ -12,6 +12,7 @@ export interface NotificationPayload {
   event: NotificationEvent;
   tenantId?: string;
   tenantName?: string;
+  recipients?: string[];
   data: Record<string, unknown>;
   timestamp: string;
 }

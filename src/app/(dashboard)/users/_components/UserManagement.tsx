@@ -73,8 +73,10 @@ interface User {
 const createSchema = z.object({
   name: z.string().min(2, "Mindestens 2 Zeichen").max(100),
   email: z.string().email("Ungültige E-Mail"),
-  password: z.string().min(12, "Mindestens 12 Zeichen"),
+  password: z.string().min(12, "Mindestens 12 Zeichen").or(z.literal("")).optional(),
   isSuperAdmin: z.boolean().default(false),
+  tenantId: z.string().optional(),
+  role: z.enum(["INTERNAL_ADMIN", "TECHNICIAN", "CUSTOMER_ADMIN", "CUSTOMER_USER", "READ_ONLY"]).optional(),
 });
 
 const editSchema = z.object({
@@ -155,7 +157,7 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
 
   return (
     <>
-      {modal === "create" && <CreateModal onClose={() => setModal(null)} onSuccess={refresh} />}
+      {modal === "create" && <CreateModal tenants={tenants} onClose={() => setModal(null)} onSuccess={refresh} />}
       {modal !== null && modal !== "create" && modal.type === "edit" && (
         <EditModal user={modal.user} onClose={() => setModal(null)} onSuccess={refresh} />
       )}
@@ -313,16 +315,17 @@ export function UserManagement({ users, tenants }: { users: User[]; tenants: Ten
   );
 }
 
-function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function CreateModal({ tenants, onClose, onSuccess }: { tenants: Tenant[]; onClose: () => void; onSuccess: () => void }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<CreateData>({
     resolver: zodResolver(createSchema),
-    defaultValues: { isSuperAdmin: false },
+    defaultValues: { isSuperAdmin: false, role: "TECHNICIAN", password: "" },
   });
 
   const onSubmit = async (data: CreateData) => {
     setServerError(null);
-    const res = await fetch("/api/users", {
+    const useInvite = Boolean(data.tenantId && data.role && !data.password);
+    const res = await fetch(useInvite ? "/api/users/invite" : "/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -344,9 +347,28 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         <Field label="E-Mail" error={errors.email?.message}>
           <input {...register("email")} type="email" placeholder="max@firma.de" className={inputCls} />
         </Field>
-        <Field label="Passwort (min. 12 Zeichen)" error={errors.password?.message}>
-          <input {...register("password")} type="password" placeholder="Mindestens 12 Zeichen" className={inputCls} />
+        <Field label="Passwort (leer lassen = Einladungs-Wizard per E-Mail)" error={errors.password?.message}>
+          <input {...register("password")} type="password" placeholder="Optional, sonst Einladung senden" className={inputCls} />
         </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Mandant für Einladung" error={errors.tenantId?.message}>
+            <select {...register("tenantId")} className={inputCls}>
+              <option value="">Mandant wählen...</option>
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Rolle" error={errors.role?.message}>
+            <select {...register("role")} className={inputCls}>
+              <option value="INTERNAL_ADMIN">Interner Admin</option>
+              <option value="TECHNICIAN">Techniker</option>
+              <option value="CUSTOMER_ADMIN">Kunden-Admin</option>
+              <option value="CUSTOMER_USER">Kunden-Benutzer</option>
+              <option value="READ_ONLY">Nur Lesen</option>
+            </select>
+          </Field>
+        </div>
         <CheckboxLabel label="Super Admin">
           <input {...register("isSuperAdmin")} type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" />
         </CheckboxLabel>

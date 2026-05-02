@@ -5,6 +5,8 @@ import { resolveTenantContext } from "@/lib/tenant";
 import { createAuditLog, getClientInfo } from "@/lib/audit";
 import { isCustomerRole } from "@/lib/permissions";
 import { created, unauthorized, forbidden, notFound, serverError, handleZodError } from "@/lib/api";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { getTicketCommentRecipients } from "@/lib/ticket-notifications";
 
 const commentSchema = z.object({
   content: z.string().min(1).max(5000),
@@ -69,6 +71,26 @@ export async function POST(
       ipAddress,
       userAgent,
     });
+
+    const [tenant, recipients] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: ticket.tenantId }, select: { name: true } }),
+      getTicketCommentRecipients(ticketId, isInternal, ctx.userId),
+    ]);
+    dispatchNotification({
+      event: "ticket.comment",
+      tenantId: ticket.tenantId,
+      tenantName: tenant?.name,
+      recipients,
+      data: {
+        id: ticket.id,
+        tenantId: ticket.tenantId,
+        number: ticket.number,
+        title: ticket.title,
+        authorName: comment.user.name,
+        isInternal,
+      },
+      timestamp: new Date().toISOString(),
+    }).catch(() => {});
 
     return created(comment);
   } catch (error) {

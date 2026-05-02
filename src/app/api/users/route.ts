@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Assign tenant role if provided
     if (parsed.data.tenantId && parsed.data.role) {
+      await prisma.userTenantRole.deleteMany({ where: { userId: user.id } });
       await prisma.userTenantRole.create({
         data: {
           userId: user.id,

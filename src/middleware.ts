@@ -1,9 +1,9 @@
-import { getToken } from "next-auth/jwt";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const PUBLIC_PATHS = [
   "/login",
+  "/setup-account",
   "/api/auth",
   "/api/health",
   "/_next",
@@ -11,18 +11,24 @@ const PUBLIC_PATHS = [
   "/icons",
 ];
 
+function hasSessionCookie(req: NextRequest) {
+  return req.cookies
+    .getAll()
+    .some((cookie) =>
+      cookie.name === "authjs.session-token" ||
+      cookie.name === "__Secure-authjs.session-token" ||
+      cookie.name.startsWith("authjs.session-token.") ||
+      cookie.name.startsWith("__Secure-authjs.session-token.")
+    );
+}
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (isPublic) return NextResponse.next();
 
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
-  const token =
-    (await getToken({ req, secret, secureCookie: true })) ??
-    (await getToken({ req, secret, secureCookie: false }));
-
-  if (!token) {
+  if (!hasSessionCookie(req)) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
