@@ -7,9 +7,10 @@ interface Props {
   userName: string;
   userEmail: string;
   tenantName: string;
+  roleLabel: string;
 }
 
-export function PortalUserMenu({ userName, userEmail, tenantName }: Props) {
+export function PortalUserMenu({ userName, userEmail, tenantName, roleLabel }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,7 +52,7 @@ export function PortalUserMenu({ userName, userEmail, tenantName }: Props) {
             <div className="mt-1.5 flex items-center gap-1.5">
               <span className="text-xs text-gray-400 truncate">{tenantName}</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
-                Mitarbeiter
+                {roleLabel}
               </span>
             </div>
           </div>

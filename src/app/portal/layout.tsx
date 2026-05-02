@@ -40,7 +40,7 @@ export default async function PortalLayout({
               </svg>
               Tickets
             </Link>
-                        <Link
+            <Link
               href="/portal/tickets/new"
               className="ml-2 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
@@ -49,6 +49,14 @@ export default async function PortalLayout({
               </svg>
               Neues Ticket
             </Link>
+            {ctx.isCustomerAdmin && (
+              <Link
+                href="/portal/management"
+                className="ml-1 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+              >
+                Verwaltung
+              </Link>
+            )}
           </nav>
 
           {/* User menu (desktop) + sign-out form */}
@@ -56,6 +64,7 @@ export default async function PortalLayout({
             userName={ctx.userName}
             userEmail={ctx.userEmail}
             tenantName={ctx.tenantName}
+            roleLabel={ctx.roleLabel}
           />
         </div>
       </header>
@@ -66,7 +75,7 @@ export default async function PortalLayout({
       </main>
 
       {/* ── Mobile bottom nav ── */}
-      <PortalMobileNav />
+      <PortalMobileNav isCustomerAdmin={ctx.isCustomerAdmin} />
     </div>
   );
 }
