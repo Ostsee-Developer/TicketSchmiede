@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth";
+import { getToken } from "next-auth/jwt";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const PUBLIC_PATHS = [
@@ -10,13 +11,18 @@ const PUBLIC_PATHS = [
   "/icons",
 ];
 
-export default auth((req) => {
+export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (isPublic) return NextResponse.next();
 
-  if (!req.auth) {
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  });
+
+  if (!token) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
@@ -26,7 +32,7 @@ export default auth((req) => {
   if (pathname === "/") return NextResponse.next();
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|icons|public).*)"],
