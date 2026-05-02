@@ -32,9 +32,6 @@ export function notFound(message = "Nicht gefunden") {
   return NextResponse.json({ success: false, error: message }, { status: 404 });
 }
 
-export function conflict(message: string) {
-  return NextResponse.json({ success: false, error: message }, { status: 409 });
-}
 
 export function serverError(error: unknown) {
   console.error("[API Error]", error);

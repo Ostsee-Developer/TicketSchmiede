@@ -1,4 +1,4 @@
-import { access, cp, mkdir, stat, writeFile } from "fs/promises";
+import { access, cp, mkdir, readdir, rm, stat, writeFile } from "fs/promises";
 import { constants } from "fs";
 import path from "path";
 import { spawn } from "child_process";
@@ -36,7 +36,7 @@ export const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
 
 export const DEFAULT_BACKUP_SETTINGS: BackupSettings = {
   enabled: true,
-  directory: "backups",
+  directory: process.env.BACKUP_DIR || "/app/backups",
   retentionDays: 30,
   includeAuditLog: true,
   includeSecrets: false,
@@ -158,7 +158,8 @@ export async function createJsonBackup() {
 
   const archivePath = path.join(directory, `ticket-schmiede-${timestamp}.tar.gz`);
   await createTarArchive(directory, path.basename(workDir), archivePath);
-  return { filePath: archivePath, workingDirectory: workDir, createdAt: data.createdAt, database: dbDump, files };
+  const pruned = await pruneOldBackups(directory, settings.retentionDays);
+  return { filePath: archivePath, workingDirectory: workDir, createdAt: data.createdAt, database: dbDump, files, pruned };
 }
 
 async function collectBackupData(settings: BackupSettings) {
@@ -263,19 +264,17 @@ async function copyUploadedFiles(workDir: string) {
   let copied = 0;
   let skipped = 0;
 
-  const sourceDirs = [
+  const sourceDirs = await uniqueExistingSourceDirs([
     process.env.UPLOAD_DIR,
     process.env.FILE_STORAGE_PATH,
     "uploads",
     "/app/uploads",
     "public/uploads",
     "storage",
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as string[]);
 
-  for (const source of sourceDirs) {
-    const absolute = path.resolve(process.cwd(), source);
-    if (!(await pathExists(absolute))) continue;
-    await cp(absolute, path.join(targetRoot, "directories", sanitizePathSegment(source)), {
+  for (const { label, absolute } of sourceDirs) {
+    await cp(absolute, path.join(targetRoot, "directories", sanitizePathSegment(label)), {
       recursive: true,
       force: true,
     });
@@ -301,7 +300,66 @@ async function copyUploadedFiles(workDir: string) {
 function resolveStoredFilePath(storagePath: string | null | undefined) {
   if (!storagePath) return null;
   if (/^s3:\/\//i.test(storagePath)) return null;
+
+  const uploadRoot = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.join(process.cwd(), "uploads");
+
+  if (storagePath.startsWith("/api/uploads/")) {
+    return path.resolve(uploadRoot, storagePath.replace(/^\/api\/uploads\//, ""));
+  }
+
+  if (storagePath.startsWith("/uploads/")) {
+    return path.resolve(process.cwd(), "public", storagePath.replace(/^\//, ""));
+  }
+
   return path.isAbsolute(storagePath) ? storagePath : path.resolve(process.cwd(), storagePath);
+}
+
+async function uniqueExistingSourceDirs(sources: string[]) {
+  const seen = new Set<string>();
+  const result: Array<{ label: string; absolute: string }> = [];
+
+  for (const source of sources) {
+    const absolute = path.resolve(process.cwd(), source);
+    if (seen.has(absolute) || !(await pathExists(absolute))) continue;
+    seen.add(absolute);
+    result.push({ label: source, absolute });
+  }
+
+  return result;
+}
+
+async function pruneOldBackups(directory: string, retentionDays: number) {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  let removed = 0;
+
+  try {
+    const entries = await readdir(directory, { withFileTypes: true });
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (!entry.name.startsWith("ticket-schmiede-")) return;
+
+        const fullPath = path.join(directory, entry.name);
+        const entryStat = await stat(fullPath);
+        if (entryStat.mtimeMs >= cutoff) return;
+
+        if (entry.isFile() && entry.name.endsWith(".tar.gz")) {
+          await rm(fullPath, { force: true });
+          removed += 1;
+        }
+
+        if (entry.isDirectory()) {
+          await rm(fullPath, { recursive: true, force: true });
+          removed += 1;
+        }
+      })
+    );
+  } catch {
+    return { removed, skipped: true };
+  }
+
+  return { removed, skipped: false };
 }
 
 async function createTarArchive(cwd: string, sourceName: string, archivePath: string) {

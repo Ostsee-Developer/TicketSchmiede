@@ -161,18 +161,3 @@ async function isDuplicateAuditLog(data: {
   return Boolean(recent);
 }
 
-export function diffObjects(
-  before: Record<string, unknown>,
-  after: Record<string, unknown>
-): string[] {
-  const changes: string[] = [];
-  const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-
-  for (const key of allKeys) {
-    if (before[key] !== after[key]) {
-      changes.push(key);
-    }
-  }
-
-  return changes;
-}

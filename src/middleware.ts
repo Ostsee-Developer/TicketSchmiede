@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   "/setup-account",
   "/api/auth",
   "/api/health",
+  "/api/uploads",
   "/_next",
   "/favicon.ico",
   "/icons",

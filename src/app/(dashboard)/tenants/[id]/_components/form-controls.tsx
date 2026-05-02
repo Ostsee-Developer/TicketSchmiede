@@ -63,26 +63,6 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
-export function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="text-base font-semibold text-foreground mb-4">{children}</h2>
-  );
-}
-
-export function FormGrid({ children, cols = 2 }: { children: ReactNode; cols?: 1 | 2 | 3 }) {
-  return (
-    <div
-      className={`grid gap-4 ${
-        cols === 1 ? "grid-cols-1" :
-        cols === 2 ? "grid-cols-1 sm:grid-cols-2" :
-        "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function TextInput({
   label,
   name,
@@ -206,14 +186,6 @@ export function DeleteButton({ children = "Löschen" }: { children?: ReactNode }
     >
       {children}
     </button>
-  );
-}
-
-export function FormActions({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 pt-5 mt-5 border-t border-border">
-      {children}
-    </div>
   );
 }
 

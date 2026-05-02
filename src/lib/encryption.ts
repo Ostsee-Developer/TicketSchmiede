@@ -70,10 +70,3 @@ export function safeDecrypt(encryptedData: string | null | undefined): string | 
   }
 }
 
-/**
- * Encrypt only if value is non-empty, otherwise return null.
- */
-export function encryptIfPresent(value: string | null | undefined): string | null {
-  if (!value || value.trim() === "") return null;
-  return encrypt(value);
-}

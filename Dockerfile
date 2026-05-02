@@ -35,39 +35,39 @@ RUN npm run build
 
 # Stage 3: Runner (production image)
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl tini curl
+RUN apk add --no-cache libc6-compat openssl tini curl postgresql-client
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+# The official node image already provides user/group node:node as UID/GID 1000.
+# We use it directly so bind mounts (uploads/backups) can be owned by 1000:1000 on the host.
 
 # Copy built application
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
 # Copy Prisma schema and full node_modules (needed for prisma migrate deploy)
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 
 # Copy startup script
-COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-RUN chmod +x /app/scripts/start.sh
+COPY --from=builder --chown=node:node /app/scripts ./scripts
+RUN chmod +x /app/scripts/start.sh \
+    && mkdir -p /app/uploads /app/public/uploads /app/backups \
+    && chown -R node:node /app/uploads /app/public/uploads /app/backups /app/scripts
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
-
-USER nextjs
+USER node
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV UPLOAD_DIR=/app/uploads
+ENV BACKUP_DIR=/app/backups
 
 # Use tini as PID 1 for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]

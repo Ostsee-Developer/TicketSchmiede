@@ -1,7 +1,6 @@
 import { auth } from "./auth";
 import { prisma } from "./prisma";
 import { Role } from "@prisma/client";
-import { isCustomerRole } from "./permissions";
 
 export interface TenantContext {
   userId: string;
@@ -70,18 +69,3 @@ export async function getUserTenants(userId: string, isSuperAdmin: boolean) {
     .map((r) => ({ ...r.tenant, role: r.role }));
 }
 
-/**
- * Strict tenant filter - ensures all queries include tenantId.
- * Use this in every data-access function to enforce tenant isolation.
- */
-export function tenantFilter(tenantId: string) {
-  return { tenantId };
-}
-
-/**
- * Check if a customer role can access a specific employee
- * (only by name, not sensitive data).
- */
-export function canViewSensitiveData(role: Role): boolean {
-  return !isCustomerRole(role);
-}

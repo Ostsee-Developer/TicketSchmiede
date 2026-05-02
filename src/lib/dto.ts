@@ -27,54 +27,6 @@ export function serializeSoftware<T extends WithLicenseKey<object>>(
   return safe as WithoutLicenseKey<T>;
 }
 
-// ─── Credentials ─────────────────────────────────────────────────────────────
-
-type RawCredential = {
-  encryptedPassword?: string | null;
-  encryptedNotes?: string | null;
-  encryptedRustdeskPassword?: string | null;
-  encryptedTeamviewerPassword?: string | null;
-  [key: string]: unknown;
-};
-
-type SafeCredential<T extends RawCredential> = Omit<
-  T,
-  | "encryptedPassword"
-  | "encryptedNotes"
-  | "encryptedRustdeskPassword"
-  | "encryptedTeamviewerPassword"
-> & {
-  hasPassword: boolean;
-  hasNotes: boolean;
-  hasRustdeskPassword: boolean;
-  hasTeamviewerPassword: boolean;
-};
-
-/**
- * Replace all encrypted credential fields with boolean "has…" flags.
- * Encrypted ciphertext must never leave the server — only the /reveal
- * endpoint (INTERNAL_ADMIN+) returns the decrypted values.
- */
-export function serializeCredential<T extends RawCredential>(
-  credential: T
-): SafeCredential<T> {
-  const {
-    encryptedPassword,
-    encryptedNotes,
-    encryptedRustdeskPassword,
-    encryptedTeamviewerPassword,
-    ...rest
-  } = credential;
-
-  return {
-    ...rest,
-    hasPassword: !!encryptedPassword,
-    hasNotes: !!encryptedNotes,
-    hasRustdeskPassword: !!encryptedRustdeskPassword,
-    hasTeamviewerPassword: !!encryptedTeamviewerPassword,
-  } as SafeCredential<T>;
-}
-
 // ─── Ticket ───────────────────────────────────────────────────────────────────
 
 type WithInternalNotes<T> = T & { internalNotes?: string | null };
