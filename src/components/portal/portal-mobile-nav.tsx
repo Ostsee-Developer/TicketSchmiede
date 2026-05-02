@@ -37,6 +37,14 @@ export function PortalMobileNav() {
           </div>
           <span className="mt-1">Neu</span>
         </Link>
+
+        <Link href="/portal/management" className={navClass("/portal/management")}>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive("/portal/management") ? 2.5 : 2}
+              d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+          Admin
+        </Link>
       </div>
     </nav>
   );
