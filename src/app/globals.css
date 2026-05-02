@@ -139,6 +139,10 @@
     @apply min-h-[44px] min-w-[44px];
   }
 
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   /* Better line height for body text on mobile */
   .prose-mobile {
     @apply leading-relaxed text-base sm:text-sm;
